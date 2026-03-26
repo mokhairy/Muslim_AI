@@ -1,0 +1,89 @@
+{% extends "Islamic_Calender/base.html" %}
+
+{% block title %}Tafsir | Muslim AI{% endblock %}
+
+{% block content %}
+    <section class="hero">
+        <p class="eyebrow">alquran.cloud</p>
+        <h1>Tafsir Browser</h1>
+        <p class="intro">
+            This tafsir page now uses <a href="https://alquran.cloud/api" target="_blank" rel="noreferrer">alquran.cloud</a>
+            only. Choose a surah and tafsir edition to browse Arabic ayat with the selected tafsir.
+        </p>
+    </section>
+
+    <section class="lookup-grid">
+        <form method="get" class="panel form-panel">
+            <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+            <h2>Load Tafsir</h2>
+            <p>
+                <label for="id_surah">Surah Number</label>
+                <input id="id_surah" type="number" name="surah" min="1" max="114" value="{{ surah_number }}">
+            </p>
+            <p>
+                <label for="id_translation">Tafsir Edition</label>
+                <select id="id_translation" name="translation">
+                    {% for value, label in translation_options %}
+                    <option value="{{ value }}"{% if value == selected_translation %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </p>
+            <div class="prayer-form-actions">
+                <button type="submit">Load Tafsir</button>
+            </div>
+            {% if service_error %}
+            <p class="service-error">{{ service_error }}</p>
+            {% endif %}
+        </form>
+
+        <article class="panel result-panel">
+            <div>
+                <p class="panel-label">Source</p>
+                <p class="result-main">api.alquran.cloud</p>
+            </div>
+            <div>
+                <p class="panel-label">Surah</p>
+                <p class="result-main">{{ surah_number }}</p>
+            </div>
+            <div>
+                <p class="panel-label">Edition</p>
+                <p class="result-main">{{ selected_translation }}</p>
+            </div>
+            <div>
+                <p class="panel-label">Verses</p>
+                <p class="result-main">{{ tafsir_items|length }}</p>
+            </div>
+        </article>
+    </section>
+
+    {% if tafsir_items %}
+    <section class="panel table-panel">
+        <div class="table-header">
+            <div>
+                <p class="panel-label">Tafsir</p>
+                <h2>Surah {{ surah_number }}</h2>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="analysis-table">
+                <thead>
+                    <tr>
+                        <th>Ayah</th>
+                        <th>Arabic</th>
+                        <th>Explanation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in tafsir_items %}
+                    <tr>
+                        <td><strong>{{ item.numberInSurah }}</strong></td>
+                        <td>{{ item.arabic_text }}</td>
+                        <td>{{ item.tafsir_text }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+{% endblock %}

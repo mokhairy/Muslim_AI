@@ -1,0 +1,87 @@
+{% extends "Islamic_Calender/base.html" %}
+{% load static %}
+
+{% block title %}Brand Kits | Muslim AI{% endblock %}
+
+{% block content %}
+    <section class="hero">
+        <p class="eyebrow">Brand Exploration</p>
+        <h1>Muslim AI Logo Concepts</h1>
+        <p class="intro">
+            These directions are intentionally different from each other so you can choose a clear identity
+            before I integrate one into the shared title bar and overall product shell.
+        </p>
+    </section>
+
+    <section class="panel brand-brief">
+        <div>
+            <p class="panel-label">Goal</p>
+            <p class="brand-brief-copy">Find a durable brand system for Muslim AI that can work in the sidebar, a top title bar, browser tabs, and future mobile surfaces.</p>
+        </div>
+        <div>
+            <p class="panel-label">Included</p>
+            <p class="brand-brief-copy">Each kit includes a logo mark, a color palette, typography direction, and a title bar preview.</p>
+        </div>
+        <div>
+            <p class="panel-label">Next Step</p>
+            <p class="brand-brief-copy">Choose one concept by name and I will fold it into the main layout.</p>
+        </div>
+    </section>
+
+    <section class="brand-grid">
+        {% for kit in branding_kits %}
+        <article class="panel brand-card brand-variant-{{ kit.slug }}">
+            <div class="brand-card-top">
+                <div class="brand-mark-wrap">
+                    <img class="brand-mark" src="{% static kit.logo_path %}" alt="{{ kit.name }} logo concept">
+                </div>
+                <div class="brand-copy">
+                    <p class="brand-kicker">Concept {{ forloop.counter }}</p>
+                    <h2>{{ kit.name }}</h2>
+                    <p class="brand-tagline">{{ kit.tagline }}</p>
+                    <p class="brand-summary">{{ kit.summary }}</p>
+                </div>
+            </div>
+
+            <div class="brand-meta-grid">
+                <div class="brand-block">
+                    <p class="panel-label">Typography</p>
+                    <p class="brand-detail"><strong>Headline:</strong> {{ kit.headline_font }}</p>
+                    <p class="brand-detail"><strong>Body:</strong> {{ kit.body_font }}</p>
+                </div>
+                <div class="brand-block">
+                    <p class="panel-label">Personality</p>
+                    <div class="brand-keywords">
+                        {% for keyword in kit.keywords %}
+                        <span class="brand-chip">{{ keyword }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="brand-swatches" aria-label="{{ kit.name }} color palette">
+                {% for color in kit.colors %}
+                <div class="swatch-card">
+                    <span class="swatch-color" style="background: {{ color.value }}"></span>
+                    <span class="swatch-label">{{ color.label }}</span>
+                    <span class="swatch-value">{{ color.value }}</span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="brand-titlebar-preview">
+                <div class="preview-topbar">
+                    <div class="preview-brandline">
+                        <img class="preview-brandmark" src="{% static kit.logo_path %}" alt="">
+                        <div>
+                            <p class="preview-kicker">{{ kit.titlebar_kicker }}</p>
+                            <p class="preview-title">{{ kit.titlebar_title }}</p>
+                        </div>
+                    </div>
+                    <span class="preview-pill">{{ kit.titlebar_meta }}</span>
+                </div>
+            </div>
+        </article>
+        {% endfor %}
+    </section>
+{% endblock %}

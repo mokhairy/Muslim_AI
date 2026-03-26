@@ -1,0 +1,258 @@
+{% extends "Islamic_Calender/base.html" %}
+
+{% block title %}Ramadan Trends | Muslim AI Calendar{% endblock %}
+
+{% block content %}
+    <section class="hero">
+        <p class="eyebrow">Muslim_AI</p>
+        <h1>Ramadan Trend Analysis</h1>
+        <p class="intro">
+            This view checks the last ten days of every complete supported Ramadan
+            in the {{ current_calendar_mode.label }} calendar, then breaks out the odd nights
+            to see whether any obvious weekday or Friday bias actually exists.
+        </p>
+
+        <form method="get" class="panel mode-form">
+            <div>
+                <label for="analysis-calendar-mode">Calendar mode</label>
+                <select id="analysis-calendar-mode" name="calendar_mode">
+                    {% for mode in calendar_modes %}
+                    <option value="{{ mode.slug }}"{% if current_calendar_mode.slug == mode.slug %} selected{% endif %}>{{ mode.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <p class="mode-copy">
+                {{ current_calendar_mode.description }} Supported range:
+                {{ current_calendar_mode.supported_min|date:"Y-m-d" }} to
+                {{ current_calendar_mode.supported_max|date:"Y-m-d" }}.
+            </p>
+            <button type="submit">Switch Mode</button>
+        </form>
+    </section>
+
+    <section class="summary-grid">
+        <article class="panel summary-card">
+            <p class="panel-label">Supported Ramadans</p>
+            <p class="summary-value">{{ supported_ramadan_years }}</p>
+            <p class="summary-copy">
+                Complete Ramadan months from {{ supported_ramadan_start_year }} AH to
+                {{ supported_ramadan_end_year }} AH.
+            </p>
+        </article>
+
+        <article class="panel summary-card">
+            <p class="panel-label">Last Ten Days Tracked</p>
+            <p class="summary-value">{{ last_ten_day_headers.0 }} to {{ last_ten_day_headers|last }}</p>
+            <p class="summary-copy">
+                Every complete supported Ramadan contributes a full 10-day window in this model.
+            </p>
+        </article>
+
+        <article class="panel summary-card">
+            <p class="panel-label">Odd-Night Friday Spread</p>
+            <p class="summary-value">{{ odd_day_analysis.friday_range }} years</p>
+            <p class="summary-copy">
+                Across the odd dates that appear in this mode's last-ten-day window,
+                the gap between the highest and lowest Friday counts is {{ odd_day_analysis.friday_range }}.
+            </p>
+        </article>
+
+        <article class="panel summary-card">
+            <p class="panel-label">Friday Hotspot</p>
+            {% if friday_focus %}
+                <p class="summary-value">{{ friday_focus.hijri_day }} Ramadan</p>
+                <p class="summary-copy">
+                    Friday appeared {{ friday_focus.friday_count }} times
+                    ({{ friday_focus.friday_percentage|floatformat:1 }}%) on this odd night.
+                </p>
+            {% else %}
+                <p class="summary-value">No data</p>
+            {% endif %}
+        </article>
+    </section>
+
+    <section class="visual-grid">
+        <article class="panel visual-card">
+            <div class="visual-header">
+                <div>
+                    <p class="panel-label">Visual</p>
+                    <h2>Friday Balance Across the Last Ten Days</h2>
+                </div>
+                <p class="trend-meta">
+                    Bars show deviation from each day's own 1-in-7 Friday expectation
+                    ({{ friday_balance_chart.expected_percentage|floatformat:1 }}%).
+                </p>
+            </div>
+
+            <svg
+                class="analysis-chart"
+                viewBox="0 0 {{ friday_balance_chart.width }} {{ friday_balance_chart.height }}"
+                role="img"
+                aria-labelledby="friday-balance-title friday-balance-desc"
+            >
+                <title id="friday-balance-title">Friday balance across the last ten days of Ramadan</title>
+                <desc id="friday-balance-desc">
+                    Each bar shows how far the observed Friday count for one Ramadan day
+                    sits above or below the uniform expectation.
+                </desc>
+                <line
+                    class="chart-baseline"
+                    x1="{{ friday_balance_chart.plot_left }}"
+                    y1="{{ friday_balance_chart.baseline_y }}"
+                    x2="{{ friday_balance_chart.plot_right }}"
+                    y2="{{ friday_balance_chart.baseline_y }}"
+                />
+                <text
+                    class="chart-baseline-label"
+                    x="{{ friday_balance_chart.plot_left }}"
+                    y="{{ friday_balance_chart.baseline_y|add:'-10' }}"
+                >
+                    Expected
+                </text>
+                {% for bar in friday_balance_chart.bars %}
+                <text class="chart-delta-label" x="{{ bar.center_x }}" y="{{ bar.delta_y }}">
+                    {{ bar.delta_display }}
+                </text>
+                <rect
+                    class="chart-bar{% if bar.is_odd %} chart-bar-odd{% endif %}{% if not bar.is_positive %} chart-bar-negative{% endif %}"
+                    x="{{ bar.x }}"
+                    y="{{ bar.y }}"
+                    width="{{ bar.width }}"
+                    height="{{ bar.height }}"
+                    rx="8"
+                />
+                <text class="chart-value-label" x="{{ bar.center_x }}" y="{{ bar.count_y }}">
+                    {{ bar.friday_count }}
+                </text>
+                <text class="chart-axis-label" x="{{ bar.center_x }}" y="{{ bar.day_label_y }}">
+                    {{ bar.hijri_day }}
+                </text>
+                {% endfor %}
+            </svg>
+        </article>
+
+        <article class="panel visual-card">
+            <div class="visual-header">
+                <div>
+                    <p class="panel-label">Visual</p>
+                    <h2>Odd-Night Weekday Heatmap</h2>
+                </div>
+                <p class="trend-meta">
+                    Cell values range from {{ odd_weekday_heatmap.min_count }} to
+                    {{ odd_weekday_heatmap.max_count }}, which makes the uniformity visible.
+                </p>
+            </div>
+
+            <div class="heatmap-wrap">
+                <table class="heatmap-table">
+                    <thead>
+                        <tr>
+                            <th>Ramadan Day</th>
+                            {% for weekday in odd_weekday_heatmap.weekday_labels %}
+                            <th>{{ weekday|slice:":3" }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in odd_weekday_heatmap.rows %}
+                        <tr>
+                            <th>{{ row.hijri_day }}</th>
+                            {% for cell in row.cells %}
+                            <td
+                                class="heatmap-cell{% if cell.is_friday %} heatmap-friday{% endif %}{% if cell.is_dominant %} heatmap-dominant{% endif %}"
+                                style="--heat: {{ cell.intensity }};"
+                                title="{{ row.hijri_day }} Ramadan on {{ cell.weekday }}: {{ cell.count }} years"
+                            >
+                                {{ cell.count }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+
+    <section class="trend-grid">
+        {% for insight in odd_day_analysis.insights %}
+        <article class="panel trend-card">
+            <p class="panel-label">Odd-Night Insight</p>
+            <p class="trend-copy">{{ insight }}</p>
+        </article>
+        {% endfor %}
+    </section>
+
+    <section class="trend-grid">
+        {% for trend in last_ten_day_trends %}
+        <article class="panel trend-card{% if trend.is_odd %} trend-card-odd{% endif %}">
+            <p class="panel-label">{{ trend.hijri_day }} Ramadan</p>
+            <h2>{{ trend.dominant_weekday }}</h2>
+            <p class="trend-copy">{{ trend.highlight }}</p>
+            <p class="trend-meta">
+                Friday count: {{ trend.friday_count }} of {{ trend.eligible_years }}
+                ({{ trend.friday_percentage|floatformat:1 }}%)
+            </p>
+            <p class="trend-meta">
+                Dominant weekday count: {{ trend.dominant_count }}; weekday spread:
+                {{ trend.weekday_spread }} years
+            </p>
+            {% if trend.last_friday_year %}
+            <p class="trend-meta">Most recent Friday: {{ trend.last_friday_year }} AH</p>
+            {% endif %}
+            {% if trend.recent_friday_years %}
+            <p class="trend-meta">
+                Recent Friday years:
+                {% for year in trend.recent_friday_years %}
+                    {{ year }} AH{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </p>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </section>
+
+    <section class="panel table-panel">
+        <div class="table-header">
+            <div>
+                <p class="panel-label">Year By Year</p>
+                <h2>Ramadan Last Ten Days Across the Years</h2>
+            </div>
+        </div>
+
+        <div class="table-wrap">
+            <table class="analysis-table">
+                <thead>
+                    <tr>
+                        <th>Hijri Year</th>
+                        <th>Ramadan Span</th>
+                        {% for day_header in last_ten_day_headers %}
+                        <th>{{ day_header }} Ramadan</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ramadan_year in ramadan_years %}
+                    <tr>
+                        <td>{{ ramadan_year.hijri_year }} AH</td>
+                        <td>
+                            {{ ramadan_year.gregorian_start|date:"Y-m-d" }} to
+                            {{ ramadan_year.gregorian_end|date:"Y-m-d" }}
+                        </td>
+                        {% for day in ramadan_year.aligned_last_ten_days %}
+                        <td{% if day %} class="{% if day.is_friday %}weekday-hit {% endif %}{% if day.is_odd %}odd-day-cell{% else %}even-day-cell{% endif %}"{% endif %}>
+                            {% if day %}
+                            <strong>{{ day.weekday }}</strong><br>
+                            {{ day.gregorian_date|date:"Y-m-d" }}
+                            {% else %}
+                            <span class="empty-day">Not in last ten</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+{% endblock %}

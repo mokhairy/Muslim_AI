@@ -1,0 +1,94 @@
+{% extends "Islamic_Calender/base.html" %}
+
+{% block title %}Quran Radio | Muslim AI{% endblock %}
+
+{% block content %}
+    <section class="hero">
+        <p class="eyebrow">Radio API</p>
+        <h1>Quran Radio Directory</h1>
+        <p class="intro">
+            Connected to the Quran radio endpoint listed in the Islamic-API repository.
+            Browse the station catalog and play the selected radio stream directly from the page.
+        </p>
+    </section>
+
+    <section class="lookup-grid">
+        <form method="get" class="panel form-panel">
+            <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+            <h2>Select Station</h2>
+            <p>
+                <label for="id_station">Station ID</label>
+                <input id="id_station" type="number" name="station" min="1" value="{{ selected_station_id }}">
+            </p>
+            <div class="prayer-form-actions">
+                <button type="submit">Load Station</button>
+            </div>
+            {% if service_error %}
+            <p class="service-error">{{ service_error }}</p>
+            {% endif %}
+        </form>
+
+        <article class="panel result-panel">
+            <div>
+                <p class="panel-label">Source</p>
+                <p class="result-main">data-rosy.vercel.app</p>
+            </div>
+            <div>
+                <p class="panel-label">Stations</p>
+                <p class="result-main">{{ stations|length }}</p>
+            </div>
+            <div>
+                <p class="panel-label">Selected</p>
+                <p class="result-main">{% if selected_station %}{{ selected_station.name }}{% else %}--{% endif %}</p>
+            </div>
+        </article>
+    </section>
+
+    {% if selected_station %}
+    <section class="panel table-panel">
+        <div class="table-header">
+            <div>
+                <p class="panel-label">Playback</p>
+                <h2>{{ selected_station.name }}</h2>
+            </div>
+        </div>
+        <article class="audio-card">
+            <audio controls preload="none" src="{{ selected_station.url }}">
+                Your browser does not support the audio element.
+            </audio>
+            <p class="audio-source"><a href="{{ selected_station.url }}" target="_blank" rel="noreferrer">Open radio stream</a></p>
+        </article>
+    </section>
+    {% endif %}
+
+    {% if stations %}
+    <section class="panel table-panel">
+        <div class="table-header">
+            <div>
+                <p class="panel-label">Directory</p>
+                <h2>Available Stations</h2>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="analysis-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Stream</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for station in stations %}
+                    <tr>
+                        <td><strong>{{ station.id }}</strong></td>
+                        <td>{{ station.name }}</td>
+                        <td><a href="{{ station.url }}" target="_blank" rel="noreferrer">Open stream</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+{% endblock %}

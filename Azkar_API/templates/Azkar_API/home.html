@@ -1,0 +1,84 @@
+{% extends "Islamic_Calender/base.html" %}
+
+{% block title %}Azkar | Muslim AI{% endblock %}
+
+{% block content %}
+    <section class="hero">
+        <p class="eyebrow">Azkar API</p>
+        <h1>Azkar Collection</h1>
+        <p class="intro">
+            Connected to the raw GitHub azkar dataset listed in the Islamic-API repository.
+            Select a category to browse the flattened adhkar entries returned by the source JSON.
+        </p>
+    </section>
+
+    <section class="lookup-grid">
+        <form method="get" class="panel form-panel">
+            <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+            <h2>Select Category</h2>
+            <p>
+                <label for="id_category">Azkar Category</label>
+                <select id="id_category" name="category">
+                    {% for category in categories %}
+                    <option value="{{ category }}"{% if category == selected_category %} selected{% endif %}>{{ category }}</option>
+                    {% endfor %}
+                </select>
+            </p>
+            <div class="prayer-form-actions">
+                <button type="submit">Load Azkar</button>
+            </div>
+            {% if service_error %}
+            <p class="service-error">{{ service_error }}</p>
+            {% endif %}
+        </form>
+
+        <article class="panel result-panel">
+            <div>
+                <p class="panel-label">Source</p>
+                <p class="result-main">raw.githubusercontent.com</p>
+            </div>
+            <div>
+                <p class="panel-label">Category</p>
+                <p class="result-main">{{ selected_category|default:"Not selected" }}</p>
+            </div>
+            <div>
+                <p class="panel-label">Entries</p>
+                <p class="result-main">{{ entries|length }}</p>
+            </div>
+        </article>
+    </section>
+
+    {% if entries %}
+    <section class="panel table-panel">
+        <div class="table-header">
+            <div>
+                <p class="panel-label">Azkar</p>
+                <h2>{{ selected_category }}</h2>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="analysis-table">
+                <thead>
+                    <tr>
+                        <th>Count</th>
+                        <th>Content</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in entries %}
+                    <tr>
+                        <td><strong>{{ entry.count }}</strong></td>
+                        <td>
+                            {{ entry.content }}
+                            {% if entry.description %}
+                            <p class="summary-copy">{{ entry.description }}</p>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+{% endblock %}

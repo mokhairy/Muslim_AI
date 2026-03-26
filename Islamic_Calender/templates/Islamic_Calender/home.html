@@ -1,0 +1,119 @@
+{% extends "Islamic_Calender/base.html" %}
+
+{% block title %}Muslim AI Calendar{% endblock %}
+
+{% block content %}
+    <section class="hero">
+        <p class="eyebrow">Muslim_AI</p>
+        <h1>Muslim AI Calendar</h1>
+        <p class="intro">
+            Browse Gregorian and Hijri dates side by side from
+            {{ supported_min|date:"Y-m-d" }} to {{ supported_max|date:"Y-m-d" }}.
+            The current conversion uses the {{ current_calendar_mode.label }} calendar.
+        </p>
+
+        <form method="get" class="panel mode-form">
+            <input type="hidden" name="year" value="{{ month_anchor.year }}">
+            <input type="hidden" name="month" value="{{ month_anchor.month }}">
+            <div>
+                <label for="calendar_mode">Calendar mode</label>
+                <select id="calendar_mode" name="calendar_mode">
+                    {% for mode in calendar_modes %}
+                    <option value="{{ mode.slug }}"{% if current_calendar_mode.slug == mode.slug %} selected{% endif %}>{{ mode.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <p class="mode-copy">{{ current_calendar_mode.description }}</p>
+            <button type="submit">Switch Mode</button>
+        </form>
+    </section>
+
+    <section class="lookup-grid">
+        <form method="get" class="panel form-panel">
+            <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+            <h2>Gregorian to Hijri</h2>
+            {{ gregorian_form.as_p }}
+            <button type="submit">Convert Gregorian Date</button>
+        </form>
+
+        <form method="get" class="panel form-panel">
+            <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+            <h2>Hijri to Gregorian</h2>
+            {{ hijri_form.as_p }}
+            <button type="submit">Convert Hijri Date</button>
+        </form>
+    </section>
+
+    {% if selected_record %}
+    <section class="panel result-panel">
+        <div>
+            <p class="panel-label">Gregorian</p>
+            <p class="result-main">{{ selected_record.gregorian_date|date:"l, Y-m-d" }}</p>
+        </div>
+        <div>
+            <p class="panel-label">Hijri</p>
+            <p class="result-main">{{ selected_record.hijri_display }}</p>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="panel calendar-panel">
+        <div class="calendar-header">
+            <div>
+                <p class="panel-label">Month View</p>
+                <h2>{{ month_anchor|date:"F Y" }}</h2>
+            </div>
+            <div class="calendar-nav">
+                {% if previous_month %}
+                <a href="?year={{ previous_month.year }}&month={{ previous_month.month }}&calendar_mode={{ current_calendar_mode.slug }}">Previous</a>
+                {% endif %}
+                {% if next_month %}
+                <a href="?year={{ next_month.year }}&month={{ next_month.month }}&calendar_mode={{ current_calendar_mode.slug }}">Next</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <form method="get" class="jump-form">
+            <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+            <div>
+                <label for="year">Gregorian year</label>
+                <input id="year" type="number" name="year" min="{{ supported_min.year }}" max="{{ supported_max.year }}" value="{{ month_anchor.year }}">
+            </div>
+            <div>
+                <label for="month">Month</label>
+                <select id="month" name="month">
+                    {% for month_number, month_name in month_choices %}
+                    <option value="{{ month_number }}"{% if month_anchor.month == month_number %} selected{% endif %}>{{ month_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit">Jump to Month</button>
+        </form>
+
+        <div class="calendar-grid calendar-grid-head">
+            <div>Sun</div>
+            <div>Mon</div>
+            <div>Tue</div>
+            <div>Wed</div>
+            <div>Thu</div>
+            <div>Fri</div>
+            <div>Sat</div>
+        </div>
+
+        {% for week in month_weeks %}
+        <div class="calendar-grid">
+            {% for item in week %}
+            <article class="day-card{% if not item.in_month %} muted{% endif %}{% if item.is_selected %} selected{% endif %}">
+                <p class="gregorian-number">{{ item.date.day }}</p>
+                {% if item.record %}
+                <p class="hijri-number">{{ item.record.hijri_day }} {{ item.record.hijri_month_name }}</p>
+                <p class="hijri-year">{{ item.record.hijri_year }} AH</p>
+                {% else %}
+                <p class="hijri-number">Outside range</p>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </section>
+{% endblock %}

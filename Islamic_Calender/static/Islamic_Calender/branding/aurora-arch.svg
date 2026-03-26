@@ -1,0 +1,18 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="aurora-bg" x1="28" y1="24" x2="204" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1E31"/>
+      <stop offset="0.55" stop-color="#0F766E"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="aurora-line" x1="64" y1="56" x2="184" y2="184" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7D488"/>
+      <stop offset="1" stop-color="#F8FAFC"/>
+    </linearGradient>
+  </defs>
+  <rect x="14" y="14" width="212" height="212" rx="52" fill="url(#aurora-bg)"/>
+  <path d="M78 172V118C78 94.804 96.804 76 120 76C143.196 76 162 94.804 162 118V172" stroke="url(#aurora-line)" stroke-width="14" stroke-linecap="round"/>
+  <path d="M96 172V120C96 106.745 106.745 96 120 96C133.255 96 144 106.745 144 120V172" stroke="#F8FAFC" stroke-opacity="0.85" stroke-width="10" stroke-linecap="round"/>
+  <path d="M164 67C154.491 67 146.5 74.9911 146.5 84.5C146.5 93.4092 153.275 100.726 162 101.6C157.54 104.98 151.982 107 145.95 107C131.339 107 119.5 95.1609 119.5 80.55C119.5 65.9391 131.339 54.1 145.95 54.1C152.031 54.1 157.633 56.1541 162.108 59.5913C163.358 60.5518 162.678 62.55 161.104 62.55C160.733 62.55 160.369 62.6719 160.062 62.8981C159.754 63.1244 159.519 63.4432 159.387 63.8088C159.255 64.1744 159.232 64.5714 159.321 64.95C159.409 65.3286 159.605 65.673 159.886 65.9413C161.037 67.0472 162.603 67 164 67Z" fill="#F7D488"/>
+  <circle cx="176" cy="84" r="6" fill="#F8FAFC"/>
+</svg>

@@ -1,0 +1,103 @@
+{% extends "Islamic_Calender/base.html" %}
+
+{% block title %}Hadith API | Muslim AI{% endblock %}
+
+{% block content %}
+    <section class="hero">
+        <p class="eyebrow">Hadith API</p>
+        <h1>Primary Hadith Endpoint</h1>
+        <p class="intro">
+            This page targets the Vercel hadith endpoint referenced in the Islamic-API repository.
+            If the provider is unavailable, the page will show the API error instead of failing silently.
+        </p>
+    </section>
+
+    <section class="lookup-grid">
+        <form method="get" class="panel form-panel">
+            <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+            <h2>Load Hadith Collection</h2>
+            <p>
+                <label for="id_collection">Collection Slug</label>
+                <input id="id_collection" type="text" name="collection" value="{{ collection }}">
+            </p>
+            <p>
+                <label for="id_page">Page</label>
+                <input id="id_page" type="number" name="page" min="1" value="{{ page_number }}">
+            </p>
+            <p>
+                <label for="id_limit">Limit</label>
+                <input id="id_limit" type="number" name="limit" min="1" max="50" value="{{ page_limit }}">
+            </p>
+            <div class="prayer-form-actions">
+                <button type="submit">Query API</button>
+            </div>
+            {% if service_error %}
+            <p class="service-error">{{ service_error }}</p>
+            {% endif %}
+        </form>
+
+        <article class="panel result-panel">
+            <div>
+                <p class="panel-label">Source</p>
+                <p class="result-main">hadis-api-id.vercel.app</p>
+            </div>
+            <div>
+                <p class="panel-label">Collection</p>
+                <p class="result-main">{{ collection }}</p>
+            </div>
+            <div>
+                <p class="panel-label">Page</p>
+                <p class="result-main">{{ page_number }}</p>
+            </div>
+            <div>
+                <p class="panel-label">Parsed Items</p>
+                <p class="result-main">{{ hadith_items|length }}</p>
+            </div>
+        </article>
+    </section>
+
+    {% if hadith_items %}
+    <section class="panel table-panel">
+        <div class="table-header">
+            <div>
+                <p class="panel-label">Hadiths</p>
+                <h2>Collection Result</h2>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="analysis-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Content</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in hadith_items %}
+                    <tr>
+                        <td><strong>{{ forloop.counter }}</strong></td>
+                        <td>
+                            {% if item.text %}
+                                {{ item.text }}
+                            {% else %}
+                                {{ item }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% elif payload_preview %}
+    <section class="panel table-panel">
+        <div class="table-header">
+            <div>
+                <p class="panel-label">Raw Payload</p>
+                <h2>API Response Preview</h2>
+            </div>
+        </div>
+        <pre class="api-json-preview">{{ payload_preview }}</pre>
+    </section>
+    {% endif %}
+{% endblock %}

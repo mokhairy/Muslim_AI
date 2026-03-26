@@ -1,0 +1,92 @@
+{% extends "Islamic_Calender/base.html" %}
+
+{% block title %}Hadith Library | Muslim AI{% endblock %}
+
+{% block content %}
+    <section class="hero">
+        <p class="eyebrow">Hadith API 2</p>
+        <h1>Hadith Library Browser</h1>
+        <p class="intro">
+            Connected to the jsDelivr hadith library listed in the Islamic-API repository.
+            Select an edition and load a trimmed hadith sample from the library dataset.
+        </p>
+    </section>
+
+    <section class="lookup-grid">
+        <form method="get" class="panel form-panel">
+            <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+            <h2>Load Edition</h2>
+            <p>
+                <label for="id_edition">Edition</label>
+                <select id="id_edition" name="edition">
+                    {% for edition in editions %}
+                    <option value="{{ edition.name }}"{% if edition.name == selected_edition %} selected{% endif %}>{{ edition.label }}</option>
+                    {% endfor %}
+                </select>
+            </p>
+            <p>
+                <label for="id_limit">Hadith Limit</label>
+                <input id="id_limit" type="number" name="limit" min="1" max="40" value="{{ hadith_limit }}">
+            </p>
+            <div class="prayer-form-actions">
+                <button type="submit">Load Edition</button>
+            </div>
+            {% if service_error %}
+            <p class="service-error">{{ service_error }}</p>
+            {% endif %}
+        </form>
+
+        <article class="panel result-panel">
+            <div>
+                <p class="panel-label">Source</p>
+                <p class="result-main">cdn.jsdelivr.net</p>
+            </div>
+            <div>
+                <p class="panel-label">Edition</p>
+                <p class="result-main">{{ selected_edition|default:"Choose edition" }}</p>
+            </div>
+            <div>
+                <p class="panel-label">Dataset</p>
+                <p class="result-main">{% if selected_metadata and selected_metadata.source_name %}{{ selected_metadata.source_name }}{% else %}Hadith library{% endif %}</p>
+            </div>
+            <div>
+                <p class="panel-label">Loaded</p>
+                <p class="result-main">{{ hadith_items|length }}</p>
+            </div>
+        </article>
+    </section>
+
+    {% if hadith_items %}
+    <section class="panel table-panel">
+        <div class="table-header">
+            <div>
+                <p class="panel-label">Hadiths</p>
+                <h2>{{ selected_edition }}</h2>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="analysis-table">
+                <thead>
+                    <tr>
+                        <th>Hadith</th>
+                        <th>Text</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in hadith_items %}
+                    <tr>
+                        <td>
+                            <strong>{{ item.hadithnumber }}</strong>
+                            {% if item.reference %}
+                            <p class="summary-copy">Book {{ item.reference.book }}, Hadith {{ item.reference.hadith }}</p>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.text }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+{% endblock %}

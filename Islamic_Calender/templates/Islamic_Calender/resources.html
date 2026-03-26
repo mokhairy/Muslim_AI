@@ -1,0 +1,128 @@
+{% extends "Islamic_Calender/base.html" %}
+
+{% block title %}Islamic Network Resources | Muslim AI{% endblock %}
+
+{% block content %}
+    <section class="resources-hero panel">
+        <div>
+            <p class="eyebrow">Islamic Calendar</p>
+            <h1>Islamic Network Resources</h1>
+            <p class="intro">
+                A curated layer inside Muslim AI that highlights the live services currently worth
+                using from Islamic Network, with sermon feeds surfaced directly in the workspace.
+            </p>
+        </div>
+        <div class="tag-list">
+            <span class="prayer-badge">{{ resources_summary.services_count }} services</span>
+            <span class="prayer-badge">{{ resources_summary.sources_count }} sermon sources</span>
+            <span class="prayer-badge">{{ resources_summary.languages_count }} sermon languages</span>
+            {% if resources_summary.latest_year %}
+            <span class="prayer-badge">{{ resources_summary.latest_source_name }} {{ resources_summary.latest_year }}</span>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="prayer-stat-grid resources-stat-grid">
+        <article class="panel prayer-stat-card">
+            <p class="panel-label">Quran Stack</p>
+            <p class="summary-value prayer-summary-value">AlQuran.Cloud</p>
+            <p class="summary-copy">Primary source for editions, translations, tafsir, and recitation audio.</p>
+        </article>
+        <article class="panel prayer-stat-card">
+            <p class="panel-label">Prayer Stack</p>
+            <p class="summary-value prayer-summary-value">AlAdhan</p>
+            <p class="summary-copy">Daily timings, monthly calendar, qibla, and Hijri metadata.</p>
+        </article>
+        <article class="panel prayer-stat-card">
+            <p class="panel-label">Live Khutbah Sources</p>
+            <p class="summary-value prayer-summary-value">{{ resources_summary.sources_count }}</p>
+            <p class="summary-copy">Currently published Friday sermon sources discovered from the sermons API.</p>
+        </article>
+        <article class="panel prayer-stat-card">
+            <p class="panel-label">Languages</p>
+            <p class="summary-value prayer-summary-value">{{ resources_summary.languages_count }}</p>
+            <p class="summary-copy">
+                {% if resources_summary.languages_preview %}
+                    {{ resources_summary.languages_preview|join:", " }}
+                {% else %}
+                    Language metadata is currently unavailable.
+                {% endif %}
+            </p>
+        </article>
+    </section>
+
+    <section class="resource-grid">
+        {% for resource in network_resources %}
+        <article class="panel resource-card">
+            <div>
+                <p class="panel-label">{{ resource.category }}</p>
+                <h2>{{ resource.name }}</h2>
+                <p class="resource-tagline">{{ resource.tagline }}</p>
+            </div>
+            <p class="summary-copy">{{ resource.summary }}</p>
+            <div class="tag-list">
+                {% for highlight in resource.highlights %}
+                <span class="device-tag">{{ highlight }}</span>
+                {% endfor %}
+            </div>
+            <div class="resource-links">
+                <a class="resource-link" href="{{ resource.url }}" target="_blank" rel="noreferrer">Open Site</a>
+                <a class="resource-link" href="{{ resource.api_url }}" target="_blank" rel="noreferrer">Open Docs</a>
+            </div>
+        </article>
+        {% endfor %}
+    </section>
+
+    <section class="panel prayer-section-card">
+        <div class="section-heading">
+            <div>
+                <p class="panel-label">Sermons</p>
+                <h2>Latest Friday Sermons</h2>
+            </div>
+            <p class="section-copy">
+                Live khutbah entries pulled from the Islamic Network sermons API with direct media links.
+            </p>
+        </div>
+
+        {% if resources_error %}
+        <p class="service-error">{{ resources_error }}</p>
+        {% endif %}
+
+        {% if latest_sermons %}
+        <div class="table-wrap">
+            <table class="analysis-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Title</th>
+                        <th>Languages</th>
+                        <th>Downloads</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sermon in latest_sermons %}
+                    <tr>
+                        <td><strong>{{ sermon.date_label|default:"-" }}</strong></td>
+                        <td>{{ sermon.title }}</td>
+                        <td>{% if sermon.languages %}{{ sermon.languages|join:", " }}{% else %}-{% endif %}</td>
+                        <td>
+                            <div class="sermon-links">
+                                {% if sermon.audio_url %}<a class="sermon-link" href="{{ sermon.audio_url }}" target="_blank" rel="noreferrer">MP3</a>{% endif %}
+                                {% if sermon.pdf_url %}<a class="sermon-link" href="{{ sermon.pdf_url }}" target="_blank" rel="noreferrer">PDF</a>{% endif %}
+                                {% if sermon.doc_url %}<a class="sermon-link" href="{{ sermon.doc_url }}" target="_blank" rel="noreferrer">DOC</a>{% endif %}
+                                {% if not sermon.audio_url and not sermon.pdf_url and not sermon.doc_url %}-{% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p class="empty-state-title">Live sermons are not available right now.</p>
+            <p class="summary-copy">The resources cards remain available even when the sermons API cannot be reached.</p>
+        </div>
+        {% endif %}
+    </section>
+{% endblock %}

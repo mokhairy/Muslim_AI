@@ -1,0 +1,89 @@
+{% extends "Islamic_Calender/base.html" %}
+
+{% block title %}Quran | Muslim AI{% endblock %}
+
+{% block content %}
+    <section class="hero">
+        <p class="eyebrow">alquran.cloud</p>
+        <h1>Quran Text Explorer</h1>
+        <p class="intro">
+            This Quran page now uses <a href="https://alquran.cloud/api" target="_blank" rel="noreferrer">alquran.cloud</a>
+            only. Select a surah and translation edition to read Arabic text alongside the chosen translation.
+        </p>
+    </section>
+
+    <section class="lookup-grid">
+        <form method="get" class="panel form-panel">
+            <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+            <h2>Lookup Surah</h2>
+            <p>
+                <label for="id_surah">Surah Number</label>
+                <input id="id_surah" type="number" name="surah" min="1" max="114" value="{{ surah_number }}">
+            </p>
+            <p>
+                <label for="id_edition">Translation Edition</label>
+                <select id="id_edition" name="edition">
+                    {% for value, label in edition_options %}
+                    <option value="{{ value }}"{% if value == selected_edition %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </p>
+            <div class="prayer-form-actions">
+                <button type="submit">Load Surah</button>
+            </div>
+            {% if service_error %}
+            <p class="service-error">{{ service_error }}</p>
+            {% endif %}
+        </form>
+
+        <article class="panel result-panel">
+            <div>
+                <p class="panel-label">Source</p>
+                <p class="result-main">api.alquran.cloud</p>
+            </div>
+            <div>
+                <p class="panel-label">Surah</p>
+                <p class="result-main">{% if surah_data %}{{ surah_data.englishName }}{% else %}{{ surah_number }}{% endif %}</p>
+            </div>
+            <div>
+                <p class="panel-label">Ayat</p>
+                <p class="result-main">{% if surah_data %}{{ surah_data.numberOfAyahs }}{% else %}--{% endif %}</p>
+            </div>
+            <div>
+                <p class="panel-label">Translation</p>
+                <p class="result-main">{% if surah_data and surah_data.edition %}{{ surah_data.edition.englishName|default:surah_data.edition.name }}{% else %}--{% endif %}</p>
+            </div>
+        </article>
+    </section>
+
+    {% if surah_data and ayah_rows %}
+    <section class="panel table-panel">
+        <div class="table-header">
+            <div>
+                <p class="panel-label">Text From alquran.cloud</p>
+                <h2>{{ surah_data.englishName }}{% if surah_data.englishNameTranslation %} | {{ surah_data.englishNameTranslation }}{% endif %}</h2>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="analysis-table">
+                <thead>
+                    <tr>
+                        <th>Ayah</th>
+                        <th>Arabic</th>
+                        <th>Translation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ayah in ayah_rows %}
+                    <tr>
+                        <td><strong>{{ ayah.number_in_surah }}</strong></td>
+                        <td>{{ ayah.arabic_text }}</td>
+                        <td>{{ ayah.translation_text }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+{% endblock %}

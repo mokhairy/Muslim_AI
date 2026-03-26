@@ -1,0 +1,85 @@
+{% extends "Islamic_Calender/base.html" %}
+
+{% block title %}Hisn Muslim | Muslim AI{% endblock %}
+
+{% block content %}
+    <section class="hero">
+        <p class="eyebrow">Hisn Muslim API</p>
+        <h1>Hisn Muslim Adhkar</h1>
+        <p class="intro">
+            Connected to the alternate Hisn Muslim source linked in the Islamic-API repository.
+            Load a collection by ID and review the returned Arabic text and audio references.
+        </p>
+    </section>
+
+    <section class="lookup-grid">
+        <form method="get" class="panel form-panel">
+            <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+            <h2>Load Collection</h2>
+            <p>
+                <label for="id_collection_id">Collection ID</label>
+                <input id="id_collection_id" type="number" name="collection_id" min="1" value="{{ collection_id }}">
+            </p>
+            <div class="prayer-form-actions">
+                <button type="submit">Load Source</button>
+            </div>
+            {% if service_error %}
+            <p class="service-error">{{ service_error }}</p>
+            {% endif %}
+        </form>
+
+        <article class="panel result-panel">
+            <div>
+                <p class="panel-label">Source</p>
+                <p class="result-main">hisnmuslim.com</p>
+            </div>
+            <div>
+                <p class="panel-label">Collection ID</p>
+                <p class="result-main">{{ collection_id }}</p>
+            </div>
+            <div>
+                <p class="panel-label">Category</p>
+                <p class="result-main">{{ category_name|default:"--" }}</p>
+            </div>
+            <div>
+                <p class="panel-label">Entries</p>
+                <p class="result-main">{{ entries|length }}</p>
+            </div>
+        </article>
+    </section>
+
+    {% if entries %}
+    <section class="panel table-panel">
+        <div class="table-header">
+            <div>
+                <p class="panel-label">Adhkar</p>
+                <h2>{{ category_name }}</h2>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="analysis-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Text</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in entries %}
+                    <tr>
+                        <td><strong>{{ entry.ID }}</strong></td>
+                        <td>
+                            {{ entry.ARABIC_TEXT }}
+                            <p class="summary-copy">Repeat: {{ entry.REPEAT }}</p>
+                            {% if entry.AUDIO %}
+                            <p class="audio-source"><a href="{{ entry.AUDIO }}" target="_blank" rel="noreferrer">Audio source</a></p>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+{% endblock %}

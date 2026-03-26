@@ -1,0 +1,160 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Muslim AI Calendar{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'Islamic_Calender/site.css' %}">
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="app-sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-brandline">
+                    <img class="sidebar-logo" src="{% static 'Islamic_Calender/branding/aurora-arch.svg' %}" alt="Muslim AI Aurora Arch logo">
+                    <div>
+                        <p class="sidebar-kicker">Aurora Arch</p>
+                        <p class="sidebar-title">Muslim AI</p>
+                    </div>
+                </div>
+                <p class="sidebar-copy">
+                    Islamic knowledge hub for calendar tracking, azan workflows, Quran study, and hadith reference.
+                </p>
+                <div class="sidebar-utility-links">
+                    <a class="sidebar-utility-link{% if active_page == 'branding' %} active{% endif %}" href="{% url 'Islamic_Calender:branding' %}?calendar_mode={{ current_calendar_mode.slug }}">Brand Kits</a>
+                    <a class="sidebar-utility-link{% if active_page == 'resources' %} active{% endif %}" href="{% url 'Islamic_Calender:resources' %}?calendar_mode={{ current_calendar_mode.slug }}">Resources</a>
+                </div>
+            </div>
+
+            <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">
+                <span class="theme-toggle-label">Switch Theme</span>
+                <span class="theme-toggle-value" id="theme-toggle-value">Light</span>
+            </button>
+
+            <nav class="sidebar-nav" aria-label="Primary navigation">
+                <section class="nav-cluster{% if active_page == 'calendar' or active_page == 'ramadan' %} is-active{% endif %}">
+                    <p class="nav-cluster-title">Islamic Calendar</p>
+                    <div class="nav-subitems">
+                        <a class="sidebar-link{% if active_page == 'calendar' %} active{% endif %}" href="{% url 'Islamic_Calender:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Calendar</a>
+                        <a class="sidebar-link{% if active_page == 'ramadan' %} active{% endif %}" href="{% url 'Islamic_Calender:ramadan_analysis' %}?calendar_mode={{ current_calendar_mode.slug }}">Ramadan Trends</a>
+                    </div>
+                </section>
+
+                <section class="nav-cluster{% if active_page == 'prayers' or active_page == 'qibla' or active_page == 'azkar_api' or active_page == 'hisn_muslim' or active_page == 'radio_api' %} is-active{% endif %}">
+                    <p class="nav-cluster-title">Azan</p>
+                    <div class="nav-subitems">
+                        <a class="sidebar-link{% if active_page == 'prayers' %} active{% endif %}" href="{% url 'Prayer_Time:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Prayer Times</a>
+                        <a class="sidebar-link{% if active_page == 'qibla' %} active{% endif %}" href="{% url 'Prayer_Time:qibla' %}?calendar_mode={{ current_calendar_mode.slug }}">Qibla</a>
+                        <a class="sidebar-link{% if active_page == 'azkar_api' %} active{% endif %}" href="{% url 'Azkar_API:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Azkar</a>
+                        <a class="sidebar-link{% if active_page == 'hisn_muslim' %} active{% endif %}" href="{% url 'Hisn_Muslim:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Hisn Muslim</a>
+                        <a class="sidebar-link{% if active_page == 'radio_api' %} active{% endif %}" href="{% url 'Radio_API:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Radio</a>
+                    </div>
+                </section>
+
+                <section class="nav-cluster{% if active_page == 'quran_text' or active_page == 'quran_audio' or active_page == 'tafsir' %} is-active{% endif %}">
+                    <p class="nav-cluster-title">Quran</p>
+                    <div class="nav-subitems">
+                        <a class="sidebar-link{% if active_page == 'quran_text' %} active{% endif %}" href="{% url 'Quran_Text:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Quran Text</a>
+                        <a class="sidebar-link{% if active_page == 'quran_audio' %} active{% endif %}" href="{% url 'Quran_Audio:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Quran Audio</a>
+                        <a class="sidebar-link{% if active_page == 'tafsir' %} active{% endif %}" href="{% url 'Tafsir:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Tafsir</a>
+                    </div>
+                </section>
+
+                <section class="nav-cluster{% if active_page == 'hadith_api' or active_page == 'hadith_library' %} is-active{% endif %}">
+                    <p class="nav-cluster-title">Hadith</p>
+                    <div class="nav-subitems">
+                        <a class="sidebar-link{% if active_page == 'hadith_api' %} active{% endif %}" href="{% url 'Hadith_API:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Hadith API</a>
+                        <a class="sidebar-link{% if active_page == 'hadith_library' %} active{% endif %}" href="{% url 'Hadith_Library:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Hadith Library</a>
+                    </div>
+                </section>
+            </nav>
+        </aside>
+
+        <main class="page-shell">
+            <header class="app-topbar panel">
+                <div class="app-topbar-brand">
+                    <img class="app-topbar-logo" src="{% static 'Islamic_Calender/branding/aurora-arch.svg' %}" alt="Muslim AI logo">
+                    <div class="app-topbar-copyblock">
+                        <p class="eyebrow">Aurora Arch Identity</p>
+                        <h2 class="app-topbar-title">Muslim AI</h2>
+                        <p class="app-topbar-copy">
+                            Unified Islamic toolkit for prayer, Quran, hadith, and calendar workflows.
+                        </p>
+                    </div>
+                </div>
+                <div class="app-topbar-status">
+                    <p class="app-topbar-status-label">Workspace</p>
+                    <p class="app-topbar-status-copy">
+                        Navigate the platform from the sidebar and keep each area grouped by category.
+                    </p>
+                </div>
+                <div class="app-topbar-meta">
+                    <span class="topbar-pill">Mode: {{ current_calendar_mode.label }}</span>
+                    <span class="topbar-pill">Today: {{ today_record.hijri_display }}</span>
+                </div>
+            </header>
+
+            <section class="panel today-panel">
+                <div>
+                    <p class="panel-label">Today Gregorian</p>
+                    <p class="today-value">{{ today_record.gregorian_date|date:"l, Y-m-d" }}</p>
+                </div>
+                <div>
+                    <p class="panel-label">Today Hijri</p>
+                    <p class="today-value">{{ today_record.hijri_display }}</p>
+                </div>
+                <div>
+                    <p class="panel-label">Calendar Mode</p>
+                    <p class="today-value">{{ current_calendar_mode.label }}</p>
+                </div>
+            </section>
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    <footer class="site-footer">
+        <div class="site-footer-inner">
+            <p class="site-footer-copy">Author Mohamed Khairy</p>
+            <a class="site-footer-link" href="mailto:mkhairy@londontrade.ca">mkhairy@londontrade.ca</a>
+            <p class="site-footer-copy">Copyright © londontrade corporate</p>
+        </div>
+    </footer>
+    <script>
+        (() => {
+            const storageKey = "muslim-ai-theme";
+            const root = document.documentElement;
+            const toggle = document.getElementById("theme-toggle");
+            const toggleValue = document.getElementById("theme-toggle-value");
+
+            const applyTheme = (theme) => {
+                root.dataset.theme = theme;
+                root.style.colorScheme = theme;
+                if (toggle) {
+                    toggle.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+                }
+                if (toggleValue) {
+                    toggleValue.textContent = theme === "dark" ? "Dark" : "Light";
+                }
+            };
+
+            const storedTheme = localStorage.getItem(storageKey);
+            const preferredTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            applyTheme(storedTheme || preferredTheme);
+
+            if (!toggle) {
+                return;
+            }
+
+            toggle.addEventListener("click", () => {
+                const nextTheme = root.dataset.theme === "dark" ? "light" : "dark";
+                localStorage.setItem(storageKey, nextTheme);
+                applyTheme(nextTheme);
+            });
+        })();
+    </script>
+</body>
+</html>

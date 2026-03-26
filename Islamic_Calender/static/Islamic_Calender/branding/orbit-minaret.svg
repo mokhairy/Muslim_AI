@@ -1,0 +1,21 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="orbit-bg" x1="28" y1="24" x2="208" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#09111E"/>
+      <stop offset="0.5" stop-color="#162033"/>
+      <stop offset="1" stop-color="#2952FF"/>
+    </linearGradient>
+    <linearGradient id="orbit-ring" x1="58" y1="40" x2="194" y2="188" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4CE0B3"/>
+      <stop offset="1" stop-color="#EEF3FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="14" y="14" width="212" height="212" rx="52" fill="url(#orbit-bg)"/>
+  <circle cx="120" cy="120" r="63" stroke="url(#orbit-ring)" stroke-width="12"/>
+  <path d="M120 58L132 72H108L120 58Z" fill="#EEF3FF"/>
+  <path d="M109 76H131V169H109V76Z" fill="#EEF3FF"/>
+  <path d="M98 104H142V116H98V104Z" fill="#4CE0B3"/>
+  <path d="M92 169H148" stroke="#EEF3FF" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="178" cy="120" r="10" fill="#4CE0B3"/>
+  <circle cx="62" cy="120" r="7" fill="#EEF3FF" fill-opacity="0.9"/>
+</svg>

@@ -1,0 +1,284 @@
+{% extends "Islamic_Calender/base.html" %}
+
+{% block title %}Qibla | Muslim AI{% endblock %}
+
+{% block content %}
+    <section class="prayer-hero panel">
+        <div class="prayer-hero-copy">
+            <p class="eyebrow">Prayer_Time</p>
+            <h1>Qibla Direction</h1>
+            <p class="intro">
+                A dedicated qibla screen for the selected coordinates, with a clear bearing, compass
+                label, and resolved location context.
+            </p>
+            <div class="prayer-badge-row">
+                <span class="prayer-badge">Source: AlAdhan / Islamic Network</span>
+                <span class="prayer-badge">Mode: {{ current_calendar_mode.label }}</span>
+            </div>
+        </div>
+        <div class="prayer-hero-aside">
+            <p class="panel-label">Makkah Bearing</p>
+            <div class="prayer-hero-stats">
+                <div>
+                    <span class="hero-stat-label">Direction</span>
+                    <strong>{% if qibla_result %}{{ qibla_result.direction|floatformat:1 }}&deg;{% else %}Not loaded{% endif %}</strong>
+                </div>
+                <div>
+                    <span class="hero-stat-label">Bearing</span>
+                    <strong>{% if qibla_result %}{{ qibla_bearing_label }}{% else %}--{% endif %}</strong>
+                </div>
+                <div>
+                    <span class="hero-stat-label">Location</span>
+                    <strong>{{ location_label|default:"Set coordinates" }}</strong>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="prayer-stat-grid">
+        <article class="panel prayer-stat-card prayer-stat-card-accent">
+            <p class="panel-label">Degrees</p>
+            <p class="summary-value prayer-summary-value">
+                {% if qibla_result %}{{ qibla_result.direction|floatformat:1 }}&deg;{% else %}--{% endif %}
+            </p>
+            <p class="summary-copy">Clockwise from geographic north toward the Kaaba.</p>
+        </article>
+        <article class="panel prayer-stat-card">
+            <p class="panel-label">Bearing Label</p>
+            <p class="summary-value prayer-summary-value">{% if qibla_result %}{{ qibla_bearing_label }}{% else %}--{% endif %}</p>
+            <p class="summary-copy">A human-readable compass direction for the same heading.</p>
+        </article>
+        <article class="panel prayer-stat-card">
+            <p class="panel-label">Coordinates</p>
+            <p class="summary-value prayer-summary-value">
+                {% if qibla_result %}
+                    {{ qibla_result.latitude|floatformat:4 }}, {{ qibla_result.longitude|floatformat:4 }}
+                {% else %}
+                    --
+                {% endif %}
+            </p>
+            <p class="summary-copy">The location used to calculate the qibla direction.</p>
+        </article>
+        <article class="panel prayer-stat-card">
+            <p class="panel-label">Resolved Address</p>
+            <p class="summary-value prayer-summary-value">{% if resolved_address %}Loaded{% else %}Optional{% endif %}</p>
+            <p class="summary-copy">{{ resolved_address|default:"Provide a label or let reverse geocoding fill it in." }}</p>
+        </article>
+    </section>
+
+    <section class="prayer-workspace">
+        <div class="prayer-sidebar">
+            <form method="get" class="panel prayer-section-card" id="qibla-form">
+                <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+                <div class="section-heading">
+                    <div>
+                        <p class="panel-label">Lookup</p>
+                        <h2>Find Qibla</h2>
+                    </div>
+                    <p class="section-copy">Use coordinates directly or pull the current device position into the form.</p>
+                </div>
+
+                {% if qibla_form.non_field_errors %}
+                <div class="form-errors">{{ qibla_form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="field-grid field-grid-compact">
+                    <div class="field-block">
+                        <label for="{{ qibla_form.latitude.id_for_label }}">{{ qibla_form.latitude.label }}</label>
+                        {{ qibla_form.latitude }}
+                        {{ qibla_form.latitude.errors }}
+                    </div>
+                    <div class="field-block">
+                        <label for="{{ qibla_form.longitude.id_for_label }}">{{ qibla_form.longitude.label }}</label>
+                        {{ qibla_form.longitude }}
+                        {{ qibla_form.longitude.errors }}
+                    </div>
+                    <div class="field-block field-block-wide">
+                        <label for="{{ qibla_form.location_label.id_for_label }}">{{ qibla_form.location_label.label }}</label>
+                        {{ qibla_form.location_label }}
+                        {{ qibla_form.location_label.errors }}
+                    </div>
+                </div>
+
+                <div class="prayer-form-actions">
+                    <button type="button" id="use-qibla-location-button" class="button-secondary">Use Current Location</button>
+                    <button type="submit">Show Qibla Direction</button>
+                </div>
+                <p class="geo-status" id="qibla-geo-status">Location not requested yet.</p>
+                {% if service_error %}
+                <p class="service-error">{{ service_error }}</p>
+                {% endif %}
+            </form>
+        </div>
+
+        <div class="prayer-main">
+            <section class="panel prayer-section-card">
+                <div class="section-heading">
+                    <div>
+                        <p class="panel-label">Direction</p>
+                        <h2>Compass Reading</h2>
+                    </div>
+                    <p class="section-copy">The arrow rotates to match the returned AlAdhan qibla heading.</p>
+                </div>
+
+                {% if qibla_result %}
+                <div class="detail-grid">
+                    <div class="detail-card">
+                        <span class="detail-label">Location label</span>
+                        <strong>{{ location_label|default:"Coordinates only" }}</strong>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Bearing</span>
+                        <strong>{{ qibla_bearing_label }}</strong>
+                    </div>
+                    <div class="detail-card detail-card-wide">
+                        <span class="detail-label">Resolved address</span>
+                        <strong>{{ resolved_address|default:"No reverse-geocoded address returned." }}</strong>
+                    </div>
+                </div>
+                <div class="qibla-visual-grid">
+                    <div class="qibla-compass-panel">
+                        <div class="qibla-compass-wrap">
+                            <svg class="qibla-compass" viewBox="0 0 200 200" role="img" aria-label="Qibla direction compass">
+                                <circle cx="100" cy="100" r="88" class="qibla-compass-ring"></circle>
+                                <circle cx="100" cy="100" r="8" class="qibla-compass-center"></circle>
+                                <text x="100" y="28" text-anchor="middle" class="qibla-cardinal">N</text>
+                                <text x="172" y="106" text-anchor="middle" class="qibla-cardinal">E</text>
+                                <text x="100" y="184" text-anchor="middle" class="qibla-cardinal">S</text>
+                                <text x="28" y="106" text-anchor="middle" class="qibla-cardinal">W</text>
+                                <g style="transform-origin: 100px 100px; transform: rotate({{ qibla_result.direction|floatformat:1 }}deg);">
+                                    <line x1="100" y1="100" x2="100" y2="42" class="qibla-compass-stem"></line>
+                                    <polygon points="100,24 112,54 100,46 88,54" class="qibla-compass-arrow"></polygon>
+                                </g>
+                            </svg>
+                        </div>
+                        <p class="summary-copy qibla-visual-copy">
+                            The compass arrow points toward the Kaaba from the selected location.
+                        </p>
+                    </div>
+                    <div class="qibla-map-panel">
+                        <div class="qibla-map-frame">
+                            <iframe
+                                id="qibla-map"
+                                class="qibla-map"
+                                title="Current location map"
+                                loading="lazy"
+                                referrerpolicy="no-referrer-when-downgrade"
+                                data-latitude="{{ qibla_result.latitude|default:'' }}"
+                                data-longitude="{{ qibla_result.longitude|default:'' }}"
+                                data-location-label="{{ location_label|default:'Current location' }}"
+                                src=""
+                            ></iframe>
+                            <div id="qibla-map-empty" class="qibla-map-empty" hidden>
+                                <p class="empty-state-title">Map preview unavailable.</p>
+                                <p class="summary-copy">Enter coordinates or use current location to render the map.</p>
+                            </div>
+                        </div>
+                        <p class="summary-copy qibla-visual-copy" id="qibla-map-caption">
+                            Current location marker for {{ location_label|default:"the selected coordinates" }}.
+                        </p>
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p class="empty-state-title">No qibla lookup loaded yet.</p>
+                    <p class="summary-copy">Enter coordinates to render the compass and the exact bearing toward Makkah.</p>
+                </div>
+                {% endif %}
+            </section>
+        </div>
+    </section>
+
+    <script>
+        (() => {
+            const button = document.getElementById("use-qibla-location-button");
+            const status = document.getElementById("qibla-geo-status");
+            const latitudeInput = document.getElementById("id_latitude");
+            const longitudeInput = document.getElementById("id_longitude");
+            const labelInput = document.getElementById("id_location_label");
+            const mapFrame = document.getElementById("qibla-map");
+            const mapEmpty = document.getElementById("qibla-map-empty");
+            const mapCaption = document.getElementById("qibla-map-caption");
+
+            const buildMapUrl = (latitude, longitude) => {
+                const lat = Number.parseFloat(latitude);
+                const lng = Number.parseFloat(longitude);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                    return "";
+                }
+
+                const lngDelta = 0.03;
+                const latDelta = 0.02;
+                const left = Math.max(-180, lng - lngDelta);
+                const right = Math.min(180, lng + lngDelta);
+                const top = Math.min(90, lat + latDelta);
+                const bottom = Math.max(-90, lat - latDelta);
+                return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${lat}%2C${lng}`;
+            };
+
+            const syncMap = (latitude, longitude, locationLabel) => {
+                if (!mapFrame) {
+                    return;
+                }
+
+                const src = buildMapUrl(latitude, longitude);
+                if (!src) {
+                    mapFrame.hidden = true;
+                    if (mapEmpty) {
+                        mapEmpty.hidden = false;
+                    }
+                    if (mapCaption) {
+                        mapCaption.textContent = "Enter coordinates or use current location to render the map.";
+                    }
+                    return;
+                }
+
+                mapFrame.src = src;
+                mapFrame.hidden = false;
+                if (mapEmpty) {
+                    mapEmpty.hidden = true;
+                }
+                if (mapCaption) {
+                    mapCaption.textContent = `Current location marker for ${locationLabel || "the selected coordinates"}.`;
+                }
+            };
+
+            if (mapFrame) {
+                syncMap(
+                    mapFrame.dataset.latitude || latitudeInput?.value,
+                    mapFrame.dataset.longitude || longitudeInput?.value,
+                    mapFrame.dataset.locationLabel || labelInput?.value,
+                );
+            }
+
+            if (!button || !navigator.geolocation || !latitudeInput || !longitudeInput) {
+                return;
+            }
+
+            button.addEventListener("click", () => {
+                status.textContent = "Requesting current location...";
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        latitudeInput.value = position.coords.latitude.toFixed(6);
+                        longitudeInput.value = position.coords.longitude.toFixed(6);
+                        if (labelInput && !labelInput.value.trim()) {
+                            labelInput.value = "Current location";
+                        }
+                        syncMap(latitudeInput.value, longitudeInput.value, labelInput?.value);
+                        status.textContent = "Location captured. Submit to load the qibla direction.";
+                    },
+                    (error) => {
+                        status.textContent = `Location request failed: ${error.message}`;
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+                );
+            });
+
+            latitudeInput.addEventListener("change", () => syncMap(latitudeInput.value, longitudeInput.value, labelInput?.value));
+            longitudeInput.addEventListener("change", () => syncMap(latitudeInput.value, longitudeInput.value, labelInput?.value));
+            if (labelInput) {
+                labelInput.addEventListener("change", () => syncMap(latitudeInput.value, longitudeInput.value, labelInput.value));
+            }
+        })();
+    </script>
+{% endblock %}

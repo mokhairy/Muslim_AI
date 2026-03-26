@@ -1,0 +1,831 @@
+{% extends "Islamic_Calender/base.html" %}
+
+{% block title %}Prayer Times | Muslim AI Calendar{% endblock %}
+
+{% block content %}
+    <section class="prayer-hero panel">
+        <div class="prayer-hero-copy">
+            <p class="eyebrow">Prayer_Time</p>
+            <h1>Prayer Times Control Center</h1>
+            <p class="intro">
+                A cleaner workspace for daily lookups, live countdowns, saved adhan automation,
+                speaker targeting, and preset management. Each area is separated so configuration,
+                scheduling, and playback controls are easier to review and save.
+            </p>
+            <div class="prayer-badge-row">
+                <span class="prayer-badge">Timezone: {{ active_timezone }}</span>
+                <span class="prayer-badge">
+                    Automation {% if automation_setting.enabled %}Enabled{% else %}Disabled{% endif %}
+                </span>
+                <span class="prayer-badge">{{ device_choices_count }} speaker target{{ device_choices_count|pluralize }}</span>
+            </div>
+        </div>
+        <div class="prayer-hero-aside">
+            <p class="panel-label">Saved Configuration</p>
+            <div class="prayer-hero-stats">
+                <div>
+                    <span class="hero-stat-label">Location</span>
+                    <strong>
+                        {% if resolved_automation_location_label %}
+                            {{ resolved_automation_location_label }}
+                        {% elif automation_setting.latitude and automation_setting.longitude %}
+                            {{ automation_setting.latitude|floatformat:4 }}, {{ automation_setting.longitude|floatformat:4 }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </strong>
+                </div>
+                <div>
+                    <span class="hero-stat-label">Default Stream</span>
+                    <strong>{{ automation_setting.selected_stream_name|default:"Not selected" }}</strong>
+                </div>
+                <div>
+                    <span class="hero-stat-label">Selected Speakers</span>
+                    <strong>{{ selected_devices|length }}</strong>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="prayer-stat-grid">
+        <article class="panel prayer-stat-card">
+            <p class="panel-label">Location Clock</p>
+            <p class="summary-value prayer-summary-value" id="location-clock" data-timezone="{{ active_timezone }}">
+                Loading...
+            </p>
+            <p class="summary-copy">
+                Current time in {{ active_timezone }} based on the active or saved location.
+            </p>
+        </article>
+
+        <article class="panel prayer-stat-card prayer-stat-card-accent">
+            <p class="panel-label">Next Prayer</p>
+            <p class="summary-value prayer-summary-value" id="next-prayer-name">
+                {% if next_prayer_dashboard %}
+                    {{ next_prayer_dashboard.next_prayer_name|default:"Unavailable" }}
+                {% else %}
+                    Not ready
+                {% endif %}
+            </p>
+            <p class="summary-copy" id="next-prayer-meta">
+                {% if next_prayer_dashboard %}
+                    {{ next_prayer_dashboard.next_prayer_day_label }} at {{ next_prayer_dashboard.next_prayer_time_label }}
+                {% elif dashboard_error %}
+                    {{ dashboard_error }}
+                {% else %}
+                    Set or look up a location to load the schedule.
+                {% endif %}
+            </p>
+        </article>
+
+        <article class="panel prayer-stat-card">
+            <p class="panel-label">Countdown</p>
+            <p
+                class="summary-value prayer-summary-value"
+                id="next-prayer-countdown"
+                data-timezone="{{ next_prayer_dashboard.timezone|default:active_timezone }}"
+            >
+                {% if next_prayer_dashboard %}Loading...{% else %}--:--:--{% endif %}
+            </p>
+            <p class="summary-copy" id="next-prayer-status">
+                {% if next_prayer_dashboard %}
+                    Live countdown for {{ next_prayer_dashboard.location_label }}.
+                {% elif dashboard_error %}
+                    Countdown unavailable until the schedule can be loaded.
+                {% else %}
+                    Countdown appears once a current location is available.
+                {% endif %}
+            </p>
+        </article>
+
+        <article class="panel prayer-stat-card">
+            <p class="panel-label">Dashboard Source</p>
+            <p class="summary-value prayer-summary-value">
+                {% if next_prayer_dashboard %}
+                    {{ next_prayer_dashboard.location_label }}
+                {% else %}
+                    No location
+                {% endif %}
+            </p>
+            <p class="summary-copy">
+                {% if next_prayer_dashboard %}
+                    {{ next_prayer_dashboard.timezone }}
+                {% else %}
+                    The dashboard uses today's prayer table for the active location.
+                {% endif %}
+            </p>
+        </article>
+    </section>
+
+    <section class="prayer-workspace">
+        <div class="prayer-sidebar">
+            <form method="get" class="panel prayer-section-card" id="prayer-form">
+                <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+                <div class="section-heading">
+                    <div>
+                        <p class="panel-label">Lookup</p>
+                        <h2>Lookup Prayer Times</h2>
+                    </div>
+                    <p class="section-copy">Search by date and coordinates, or pull the current location into both forms.</p>
+                </div>
+
+                {% if lookup_form.non_field_errors %}
+                <div class="form-errors">{{ lookup_form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="field-grid field-grid-compact">
+                    <div class="field-block field-block-wide">
+                        <label for="{{ lookup_form.prayer_date.id_for_label }}">{{ lookup_form.prayer_date.label }}</label>
+                        {{ lookup_form.prayer_date }}
+                        {{ lookup_form.prayer_date.errors }}
+                    </div>
+                    <div class="field-block">
+                        <label for="{{ lookup_form.latitude.id_for_label }}">{{ lookup_form.latitude.label }}</label>
+                        {{ lookup_form.latitude }}
+                        {{ lookup_form.latitude.errors }}
+                    </div>
+                    <div class="field-block">
+                        <label for="{{ lookup_form.longitude.id_for_label }}">{{ lookup_form.longitude.label }}</label>
+                        {{ lookup_form.longitude }}
+                        {{ lookup_form.longitude.errors }}
+                    </div>
+                    <div class="field-block field-block-wide">
+                        <label for="{{ lookup_form.location_label.id_for_label }}">{{ lookup_form.location_label.label }}</label>
+                        {{ lookup_form.location_label }}
+                        {{ lookup_form.location_label.errors }}
+                    </div>
+                </div>
+
+                <div class="prayer-form-actions">
+                    <button type="button" id="use-location-button" class="button-secondary">Use Current Location</button>
+                    <button type="submit">Get Prayer Times</button>
+                </div>
+                <p class="geo-status" id="geo-status">Location not requested yet.</p>
+                {% if service_error %}
+                <p class="service-error">{{ service_error }}</p>
+                {% endif %}
+            </form>
+
+            <article class="panel prayer-section-card">
+                <div class="section-heading">
+                    <div>
+                        <p class="panel-label">Configuration</p>
+                        <h2>Saved Snapshot</h2>
+                    </div>
+                    <p class="section-copy">Quick review of the automation configuration currently stored by the server.</p>
+                </div>
+                <div class="detail-list">
+                    <div class="detail-item">
+                        <span class="detail-label">Saved location</span>
+                        <strong>
+                            {% if resolved_automation_location_label %}
+                                {{ resolved_automation_location_label }}
+                            {% elif automation_setting.latitude and automation_setting.longitude %}
+                                {{ automation_setting.latitude|floatformat:4 }}, {{ automation_setting.longitude|floatformat:4 }}
+                            {% else %}
+                                Not set
+                            {% endif %}
+                        </strong>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Default stream</span>
+                        <strong>{{ automation_setting.selected_stream_name|default:"Not selected" }}</strong>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Automation status</span>
+                        <strong>{% if automation_setting.enabled %}Enabled{% else %}Disabled{% endif %}</strong>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Automated prayers</span>
+                        <strong>
+                            {% if automation_setting.enabled_prayers %}
+                                {{ automation_setting.enabled_prayers|join:", " }}
+                            {% else %}
+                                None
+                            {% endif %}
+                        </strong>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Speaker presets</span>
+                        <strong>{{ speaker_groups|length }}</strong>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Selected speakers</span>
+                        <strong>{{ selected_devices|length }}</strong>
+                    </div>
+                </div>
+                <div class="tag-list">
+                    {% if custom_prayer_streams %}
+                        {% for item in custom_prayer_streams %}
+                        <span class="device-tag">{{ item.prayer_name }}: {{ item.stream_name }}</span>
+                        {% endfor %}
+                    {% else %}
+                    <span class="device-tag">Default stream for all prayers</span>
+                    {% endif %}
+                </div>
+            </article>
+        </div>
+
+        <div class="prayer-main">
+            <article class="panel prayer-section-card">
+                <div class="section-heading">
+                    <div>
+                        <p class="panel-label">Schedule</p>
+                        <h2>
+                            {% if prayer_result %}
+                                Prayer Times for {{ prayer_result.readable_date }}
+                            {% else %}
+                                Daily Schedule Preview
+                            {% endif %}
+                        </h2>
+                    </div>
+                    <p class="section-copy">The current lookup result is displayed here with the calculation source and location context.</p>
+                </div>
+
+                <div class="detail-grid">
+                    <div class="detail-card">
+                        <span class="detail-label">API Source</span>
+                        <strong>AlAdhan Timings API</strong>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Broadcast Stack</span>
+                        <strong>Google Cast + DLNA</strong>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Date</span>
+                        <strong>{% if prayer_result %}{{ prayer_result.readable_date }}{% else %}Waiting for lookup{% endif %}</strong>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Hijri</span>
+                        <strong>{% if prayer_result %}{{ prayer_result.hijri_date }}{% else %}--{% endif %}</strong>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Timezone</span>
+                        <strong>{% if prayer_result %}{{ prayer_result.timezone }}{% else %}{{ active_timezone }}{% endif %}</strong>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Calculation Method</span>
+                        <strong>{% if prayer_result %}{{ prayer_result.calculation_method }}{% else %}Load a lookup{% endif %}</strong>
+                    </div>
+                </div>
+
+                {% if prayer_result %}
+                <div class="detail-list prayer-result-summary">
+                    <div class="detail-item">
+                        <span class="detail-label">Lookup location</span>
+                        <strong>
+                            {% if prayer_result_location_label %}
+                                {{ prayer_result_location_label }}
+                            {% else %}
+                                {{ prayer_result.latitude|floatformat:4 }}, {{ prayer_result.longitude|floatformat:4 }}
+                            {% endif %}
+                        </strong>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Coordinates</span>
+                        <strong>{{ prayer_result.latitude|floatformat:4 }}, {{ prayer_result.longitude|floatformat:4 }}</strong>
+                    </div>
+                    {% if prayer_result_resolved_address %}
+                    <div class="detail-item detail-item-wide">
+                        <span class="detail-label">Resolved address</span>
+                        <strong>{{ prayer_result_resolved_address }}</strong>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="table-wrap">
+                    <table class="analysis-table prayer-table">
+                        <thead>
+                            <tr>
+                                <th>Prayer</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for prayer in prayer_result.timings %}
+                            <tr>
+                                <td><strong>{{ prayer.name }}</strong></td>
+                                <td>{{ prayer.time }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p class="empty-state-title">No lookup loaded yet.</p>
+                    <p class="summary-copy">Choose a date and coordinates to load the full prayer table, Hijri date, timezone, and calculation method.</p>
+                </div>
+                {% endif %}
+            </article>
+
+            <section class="panel prayer-section-card">
+                <div class="section-heading">
+                    <div>
+                        <p class="panel-label">Islamic Network</p>
+                        <h2>Qibla and Monthly Prayer Calendar</h2>
+                    </div>
+                    <p class="section-copy">
+                        Extra planning data from the AlAdhan service so the current location can be
+                        reviewed beyond a single day lookup.
+                    </p>
+                </div>
+
+                <div class="detail-grid">
+                    <div class="detail-card">
+                        <span class="detail-label">Source</span>
+                        <strong>AlAdhan / Islamic Network</strong>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Qibla Direction</span>
+                        <strong>
+                            {% if qibla_result %}
+                                {{ qibla_result.direction|floatformat:1 }}&deg; {{ qibla_bearing_label }}
+                            {% else %}
+                                Unavailable
+                            {% endif %}
+                        </strong>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Calendar Month</span>
+                        <strong>
+                            {% if monthly_calendar %}
+                                {{ monthly_calendar.month_label }}
+                            {% else %}
+                                Unavailable
+                            {% endif %}
+                        </strong>
+                    </div>
+                    <div class="detail-card">
+                        <span class="detail-label">Calendar Timezone</span>
+                        <strong>
+                            {% if monthly_calendar %}
+                                {{ monthly_calendar.timezone }}
+                            {% else %}
+                                {{ active_timezone }}
+                            {% endif %}
+                        </strong>
+                    </div>
+                    <div class="detail-card detail-card-wide">
+                        <span class="detail-label">Calculation Method</span>
+                        <strong>
+                            {% if monthly_calendar %}
+                                {{ monthly_calendar.calculation_method }}
+                            {% elif prayer_result %}
+                                {{ prayer_result.calculation_method }}
+                            {% else %}
+                                Waiting for a valid location
+                            {% endif %}
+                        </strong>
+                    </div>
+                </div>
+
+                {% if monthly_calendar_error %}
+                <p class="service-error">{{ monthly_calendar_error }}</p>
+                {% endif %}
+
+                {% if monthly_calendar %}
+                <div class="table-wrap">
+                    <table class="analysis-table prayer-table monthly-prayer-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Fajr</th>
+                                <th>Dhuhr</th>
+                                <th>Asr</th>
+                                <th>Maghrib</th>
+                                <th>Isha</th>
+                                <th>Holiday</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for day in monthly_calendar.days %}
+                            <tr>
+                                <td>
+                                    <strong>{{ day.gregorian_date }}</strong>
+                                    <div class="table-subcopy">{{ day.weekday }} · {{ day.hijri_date }}</div>
+                                </td>
+                                <td>{{ day.timings.Fajr }}</td>
+                                <td>{{ day.timings.Dhuhr }}</td>
+                                <td>{{ day.timings.Asr }}</td>
+                                <td>{{ day.timings.Maghrib }}</td>
+                                <td>{{ day.timings.Isha }}</td>
+                                <td>{{ day.holiday_summary|default:"-" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p class="empty-state-title">Monthly calendar not loaded yet.</p>
+                    <p class="summary-copy">Add a valid location to load the qibla bearing and the full AlAdhan month view.</p>
+                </div>
+                {% endif %}
+            </section>
+
+            <form method="post" class="panel prayer-section-card">
+                {% csrf_token %}
+                <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+                <div class="section-heading">
+                    <div>
+                        <p class="panel-label">Automation</p>
+                        <h2>Automatic Adhan Configuration</h2>
+                    </div>
+                    <p class="section-copy">Save a reusable broadcast configuration with speaker groups, default streams, prayer-specific overrides, and manual test controls.</p>
+                </div>
+
+                {% if automation_form.non_field_errors %}
+                <div class="form-errors">{{ automation_form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="config-slab">
+                    <div class="slab-header">
+                        <h3>Core Settings</h3>
+                        <p class="summary-copy">These fields define the location, preset, and base stream the scheduler uses.</p>
+                    </div>
+                    <div class="field-grid">
+                        <div class="field-block field-block-inline">
+                            <label for="{{ automation_form.enabled.id_for_label }}">{{ automation_form.enabled.label }}</label>
+                            <div class="checkbox-single">{{ automation_form.enabled }}</div>
+                            {{ automation_form.enabled.errors }}
+                        </div>
+                        <div class="field-block">
+                            <label for="{{ automation_form.speaker_group_id.id_for_label }}">{{ automation_form.speaker_group_id.label }}</label>
+                            {{ automation_form.speaker_group_id }}
+                            {{ automation_form.speaker_group_id.errors }}
+                        </div>
+                        <div class="field-block field-block-wide">
+                            <label for="{{ automation_form.location_label.id_for_label }}">{{ automation_form.location_label.label }}</label>
+                            {{ automation_form.location_label }}
+                            {{ automation_form.location_label.errors }}
+                        </div>
+                        <div class="field-block">
+                            <label for="{{ automation_form.latitude.id_for_label }}">{{ automation_form.latitude.label }}</label>
+                            {{ automation_form.latitude }}
+                            {{ automation_form.latitude.errors }}
+                        </div>
+                        <div class="field-block">
+                            <label for="{{ automation_form.longitude.id_for_label }}">{{ automation_form.longitude.label }}</label>
+                            {{ automation_form.longitude }}
+                            {{ automation_form.longitude.errors }}
+                        </div>
+                        <div class="field-block field-block-wide">
+                            <label for="{{ automation_form.selected_stream_url.id_for_label }}">{{ automation_form.selected_stream_url.label }}</label>
+                            {{ automation_form.selected_stream_url }}
+                            {{ automation_form.selected_stream_url.errors }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-slab">
+                    <div class="slab-header">
+                        <h3>Prayer-Specific Streams</h3>
+                        <p class="summary-copy">Override the default stream for selected prayers when needed.</p>
+                    </div>
+                    <div class="field-grid field-grid-streams">
+                        <div class="field-block">
+                            <label for="{{ automation_form.stream_for_fajr.id_for_label }}">{{ automation_form.stream_for_fajr.label }}</label>
+                            {{ automation_form.stream_for_fajr }}
+                            {{ automation_form.stream_for_fajr.errors }}
+                        </div>
+                        <div class="field-block">
+                            <label for="{{ automation_form.stream_for_dhuhr.id_for_label }}">{{ automation_form.stream_for_dhuhr.label }}</label>
+                            {{ automation_form.stream_for_dhuhr }}
+                            {{ automation_form.stream_for_dhuhr.errors }}
+                        </div>
+                        <div class="field-block">
+                            <label for="{{ automation_form.stream_for_asr.id_for_label }}">{{ automation_form.stream_for_asr.label }}</label>
+                            {{ automation_form.stream_for_asr }}
+                            {{ automation_form.stream_for_asr.errors }}
+                        </div>
+                        <div class="field-block">
+                            <label for="{{ automation_form.stream_for_maghrib.id_for_label }}">{{ automation_form.stream_for_maghrib.label }}</label>
+                            {{ automation_form.stream_for_maghrib }}
+                            {{ automation_form.stream_for_maghrib.errors }}
+                        </div>
+                        <div class="field-block">
+                            <label for="{{ automation_form.stream_for_isha.id_for_label }}">{{ automation_form.stream_for_isha.label }}</label>
+                            {{ automation_form.stream_for_isha }}
+                            {{ automation_form.stream_for_isha.errors }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-slab">
+                    <div class="slab-header">
+                        <h3>Automation Coverage</h3>
+                        <p class="summary-copy">Select which prayers will trigger automatically and which discovered speakers should receive the adhan.</p>
+                    </div>
+                    <div class="choice-columns">
+                        <div class="choice-card">
+                            <span class="detail-label">{{ automation_form.enabled_prayers.label }}</span>
+                            <div class="checkbox-grid">
+                                {% for checkbox in automation_form.enabled_prayers %}
+                                <label class="checkbox-pill">{{ checkbox.tag }} <span>{{ checkbox.choice_label }}</span></label>
+                                {% endfor %}
+                            </div>
+                            {{ automation_form.enabled_prayers.errors }}
+                        </div>
+                        <div class="choice-card">
+                            <span class="detail-label">{{ automation_form.selected_device_ids.label }}</span>
+                            <div class="checkbox-grid checkbox-grid-devices">
+                                {% for checkbox in automation_form.selected_device_ids %}
+                                <label class="checkbox-pill">{{ checkbox.tag }} <span>{{ checkbox.choice_label }}</span></label>
+                                {% endfor %}
+                            </div>
+                            {{ automation_form.selected_device_ids.errors }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="prayer-form-actions prayer-form-actions-spread">
+                    <button type="submit" name="action" value="scan_devices" class="button-secondary">Scan Speakers</button>
+                    <button type="submit" name="action" value="load_group" class="button-secondary">Load Preset</button>
+                    <button type="submit" name="action" value="test_broadcast" class="button-secondary">Test Broadcast</button>
+                    <button type="submit" name="action" value="save_automation">Save Configuration</button>
+                </div>
+                {% if automation_message %}
+                <p class="geo-status">{{ automation_message }}</p>
+                {% endif %}
+                {% if broadcast_results %}
+                <div class="broadcast-results">
+                    {% if broadcast_results.successes %}
+                    <p class="geo-status">Succeeded: {{ broadcast_results.successes|join:", " }}</p>
+                    {% endif %}
+                    {% if broadcast_results.errors %}
+                    <p class="service-error">Errors: {{ broadcast_results.errors|join:" | " }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </form>
+
+            <div class="prayer-secondary-grid">
+                <form method="post" class="panel prayer-section-card">
+                    {% csrf_token %}
+                    <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+                    <div class="section-heading">
+                        <div>
+                            <p class="panel-label">Presets</p>
+                            <h2>Speaker Presets</h2>
+                        </div>
+                        <p class="section-copy">Save reusable zones or room combinations and load them back into the automation form.</p>
+                    </div>
+
+                    {% if group_form.non_field_errors %}
+                    <div class="form-errors">{{ group_form.non_field_errors }}</div>
+                    {% endif %}
+
+                    <div class="field-grid field-grid-compact">
+                        <div class="field-block field-block-wide">
+                            <label for="{{ group_form.name.id_for_label }}">{{ group_form.name.label }}</label>
+                            {{ group_form.name }}
+                            {{ group_form.name.errors }}
+                        </div>
+                    </div>
+
+                    <div class="choice-card">
+                        <span class="detail-label">{{ group_form.selected_device_ids.label }}</span>
+                        <div class="checkbox-grid checkbox-grid-devices">
+                            {% for checkbox in group_form.selected_device_ids %}
+                            <label class="checkbox-pill">{{ checkbox.tag }} <span>{{ checkbox.choice_label }}</span></label>
+                            {% endfor %}
+                        </div>
+                        {{ group_form.selected_device_ids.errors }}
+                    </div>
+
+                    <div class="prayer-form-actions">
+                        <button type="submit" name="action" value="save_group">Save Preset</button>
+                    </div>
+                </form>
+
+                <article class="panel prayer-section-card">
+                    <div class="section-heading">
+                        <div>
+                            <p class="panel-label">Inventory</p>
+                            <h2>Configuration Reference</h2>
+                        </div>
+                        <p class="section-copy">A segmented summary of saved presets and current stream overrides.</p>
+                    </div>
+                    <div class="detail-list">
+                        <div class="detail-item">
+                            <span class="detail-label">Saved presets</span>
+                            <strong>{{ speaker_groups|length }}</strong>
+                        </div>
+                        <div class="detail-item detail-item-wide">
+                            <span class="detail-label">Preset names</span>
+                            <strong>
+                                {% if speaker_groups %}
+                                    {% for group in speaker_groups %}
+                                        {{ group.name }}{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    None
+                                {% endif %}
+                            </strong>
+                        </div>
+                        <div class="detail-item detail-item-wide">
+                            <span class="detail-label">Custom sounds</span>
+                            <strong>
+                                {% if custom_prayer_streams %}
+                                    {% for item in custom_prayer_streams %}
+                                        {{ item.prayer_name }}: {{ item.stream_name }}{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    Default only
+                                {% endif %}
+                            </strong>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <section class="panel prayer-section-card">
+                <div class="section-heading">
+                    <div>
+                        <p class="panel-label">Local Network</p>
+                        <h2>Available Speaker Targets</h2>
+                    </div>
+                    <p class="section-copy">Discovered speakers stay visible in a separate section so hardware status is easier to review before saving.</p>
+                </div>
+                <div class="table-wrap">
+                    <table class="analysis-table prayer-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Protocol</th>
+                                <th>Model</th>
+                                <th>Host</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if available_devices %}
+                                {% for device in available_devices %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ device.name }}</strong>
+                                        {% if device.device_id in automation_setting.selected_device_ids %}
+                                        <span class="device-tag">Selected</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ device.protocol|upper }}</td>
+                                    <td>{{ device.model_name|default:"-" }}</td>
+                                    <td>{{ device.host|default:"-" }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                            <tr>
+                                <td colspan="4">No speakers discovered yet. Run a network scan from the automation panel.</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel prayer-section-card">
+                <div class="section-heading">
+                    <div>
+                        <p class="panel-label">Audio</p>
+                        <h2>Adhan Streams</h2>
+                    </div>
+                    <p class="section-copy">Preview the available streams before choosing the one you want saved as the default configuration.</p>
+                </div>
+                <div class="audio-grid">
+                    {% for stream in adhan_streams %}
+                    <article class="audio-card">
+                        <p class="panel-label">{{ stream.name }}</p>
+                        <p class="audio-copy">{{ stream.reciter }}</p>
+                        <audio controls preload="none" src="{{ stream.url }}">
+                            Your browser does not support the audio element.
+                        </audio>
+                        <p class="audio-source">
+                            Source:
+                            <a href="{{ stream.source_url }}" target="_blank" rel="noreferrer">{{ stream.source_label }}</a>
+                        </p>
+                    </article>
+                    {% endfor %}
+                </div>
+            </section>
+        </div>
+    </section>
+
+    {% if next_prayer_dashboard %}
+    {{ next_prayer_dashboard.schedule|json_script:"next-prayer-schedule" }}
+    {% endif %}
+
+    <script>
+        (() => {
+            const button = document.getElementById("use-location-button");
+            const status = document.getElementById("geo-status");
+            const latitudeInput = document.getElementById("id_latitude");
+            const longitudeInput = document.getElementById("id_longitude");
+            const labelInput = document.getElementById("id_location_label");
+            const clock = document.getElementById("location-clock");
+            const nextPrayerScheduleEl = document.getElementById("next-prayer-schedule");
+            const nextPrayerName = document.getElementById("next-prayer-name");
+            const nextPrayerMeta = document.getElementById("next-prayer-meta");
+            const nextPrayerCountdown = document.getElementById("next-prayer-countdown");
+            const nextPrayerStatus = document.getElementById("next-prayer-status");
+
+            const formatCountdown = (remainingMs) => {
+                const totalSeconds = Math.max(Math.floor(remainingMs / 1000), 0);
+                const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+                const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+                const seconds = String(totalSeconds % 60).padStart(2, "0");
+                return `${hours}:${minutes}:${seconds}`;
+            };
+
+            if (nextPrayerScheduleEl && nextPrayerName && nextPrayerMeta && nextPrayerCountdown && nextPrayerStatus) {
+                const schedule = JSON.parse(nextPrayerScheduleEl.textContent);
+                const dashboardTimeZone = nextPrayerCountdown.dataset.timezone || "Asia/Muscat";
+                const renderNextPrayerDashboard = () => {
+                    const now = Date.now();
+                    const nextPrayer = schedule.find((item) => item.timestamp_ms > now);
+                    if (!nextPrayer) {
+                        nextPrayerName.textContent = "Refresh needed";
+                        nextPrayerMeta.textContent = "Next day schedule is not loaded yet.";
+                        nextPrayerCountdown.textContent = "--:--:--";
+                        nextPrayerStatus.textContent = `Refresh to load another prayer cycle for ${dashboardTimeZone}.`;
+                        return;
+                    }
+                    nextPrayerName.textContent = nextPrayer.name;
+                    nextPrayerMeta.textContent = `${nextPrayer.day_label} at ${nextPrayer.time_label}`;
+                    nextPrayerCountdown.textContent = formatCountdown(nextPrayer.timestamp_ms - now);
+                    nextPrayerStatus.textContent = `Live countdown in ${dashboardTimeZone}.`;
+                };
+                renderNextPrayerDashboard();
+                window.setInterval(renderNextPrayerDashboard, 1000);
+            }
+
+            if (clock) {
+                const timeZone = clock.dataset.timezone || "Asia/Muscat";
+                const formatter = new Intl.DateTimeFormat("en-GB", {
+                    timeZone,
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    year: "numeric",
+                    month: "short",
+                    day: "2-digit",
+                });
+                const renderClock = () => {
+                    clock.textContent = formatter.format(new Date());
+                };
+                renderClock();
+                window.setInterval(renderClock, 1000);
+            }
+
+            if (!button || !status || !latitudeInput || !longitudeInput || !labelInput) {
+                return;
+            }
+
+            button.addEventListener("click", () => {
+                if (!navigator.geolocation) {
+                    status.textContent = "Geolocation is not available in this browser.";
+                    return;
+                }
+
+                status.textContent = "Locating...";
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const latitude = position.coords.latitude.toFixed(6);
+                        const longitude = position.coords.longitude.toFixed(6);
+                        latitudeInput.value = latitude;
+                        longitudeInput.value = longitude;
+                        const autoLat = document.getElementById("id_automation-latitude");
+                        const autoLon = document.getElementById("id_automation-longitude");
+                        if (autoLat) autoLat.value = latitude;
+                        if (autoLon) autoLon.value = longitude;
+                        const autoLabel = document.getElementById("id_automation-location_label");
+                        if (labelInput && !labelInput.dataset.userEdited) {
+                            labelInput.value = "";
+                        }
+                        if (autoLabel && !autoLabel.dataset.userEdited) {
+                            autoLabel.value = "";
+                        }
+                        status.textContent = "Current coordinates loaded into the forms.";
+                    },
+                    (error) => {
+                        status.textContent = `Location failed: ${error.message}`;
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                    },
+                );
+            });
+
+            if (labelInput) {
+                labelInput.addEventListener("input", () => {
+                    labelInput.dataset.userEdited = "true";
+                });
+            }
+            const autoLabel = document.getElementById("id_automation-location_label");
+            if (autoLabel) {
+                autoLabel.addEventListener("input", () => {
+                    autoLabel.dataset.userEdited = "true";
+                });
+            }
+        })();
+    </script>
+{% endblock %}

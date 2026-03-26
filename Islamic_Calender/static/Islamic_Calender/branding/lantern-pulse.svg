@@ -1,0 +1,19 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="lantern-bg" x1="30" y1="24" x2="210" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14324A"/>
+      <stop offset="0.58" stop-color="#FF6B57"/>
+      <stop offset="1" stop-color="#FFB703"/>
+    </linearGradient>
+    <linearGradient id="lantern-line" x1="70" y1="60" x2="170" y2="170" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF8E7"/>
+      <stop offset="1" stop-color="#FFFFFF"/>
+    </linearGradient>
+  </defs>
+  <rect x="14" y="14" width="212" height="212" rx="52" fill="url(#lantern-bg)"/>
+  <path d="M108 56H132" stroke="#FFF7DB" stroke-width="10" stroke-linecap="round"/>
+  <path d="M94 72H146" stroke="#FFF7DB" stroke-width="10" stroke-linecap="round"/>
+  <path d="M92 86C92 75.5066 100.507 67 111 67H129C139.493 67 148 75.5066 148 86V99C148 106.956 151.161 114.586 156.787 120.213L161.314 124.74C164.4 127.825 162.215 133.1 157.851 133.1H82.1492C77.7852 133.1 75.6004 127.825 78.6863 124.74L83.2132 120.213C88.8397 114.586 92 106.956 92 99V86Z" fill="#FFF3D0"/>
+  <path d="M99 141H141V152C141 163.598 131.598 173 120 173C108.402 173 99 163.598 99 152V141Z" fill="#14324A" fill-opacity="0.9"/>
+  <path d="M78 115H103L114 99L126 130L138 110L162 110" stroke="url(#lantern-line)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
