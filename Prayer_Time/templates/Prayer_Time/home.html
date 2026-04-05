@@ -514,7 +514,7 @@
                 <div class="config-slab">
                     <div class="slab-header">
                         <h3>Automation Coverage</h3>
-                        <p class="summary-copy">Select which prayers will trigger automatically and which discovered speakers should receive the adhan.</p>
+                        <p class="summary-copy">Select which prayers will trigger automatically and which speaker targets should receive the adhan, including this machine's own audio output.</p>
                     </div>
                     <div class="choice-columns">
                         <div class="choice-card">
@@ -642,10 +642,10 @@
             <section class="panel prayer-section-card">
                 <div class="section-heading">
                     <div>
-                        <p class="panel-label">Local Network</p>
+                        <p class="panel-label">Speaker Targets</p>
                         <h2>Available Speaker Targets</h2>
                     </div>
-                    <p class="section-copy">Discovered speakers stay visible in a separate section so hardware status is easier to review before saving.</p>
+                    <p class="section-copy">Local machine output stays available alongside discovered network speakers so you can test or save either path.</p>
                 </div>
                 <div class="table-wrap">
                     <table class="analysis-table prayer-table">
@@ -663,7 +663,7 @@
                                 <tr>
                                     <td>
                                         <strong>{{ device.name }}</strong>
-                                        {% if device.device_id in automation_setting.selected_device_ids %}
+                                        {% if device.device_id in current_selected_device_ids %}
                                         <span class="device-tag">Selected</span>
                                         {% endif %}
                                     </td>
@@ -715,6 +715,8 @@
 
     <script>
         (() => {
+            const shouldAutoRequestLocation = {{ auto_request_current_location|yesno:"true,false" }};
+            const prayerForm = document.getElementById("prayer-form");
             const button = document.getElementById("use-location-button");
             const status = document.getElementById("geo-status");
             const latitudeInput = document.getElementById("id_latitude");
@@ -779,13 +781,13 @@
                 return;
             }
 
-            button.addEventListener("click", () => {
+            const requestCurrentLocation = ({ submitForm = false } = {}) => {
                 if (!navigator.geolocation) {
                     status.textContent = "Geolocation is not available in this browser.";
                     return;
                 }
 
-                status.textContent = "Locating...";
+                status.textContent = submitForm ? "Locating and loading prayer times..." : "Locating...";
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         const latitude = position.coords.latitude.toFixed(6);
@@ -803,7 +805,12 @@
                         if (autoLabel && !autoLabel.dataset.userEdited) {
                             autoLabel.value = "";
                         }
-                        status.textContent = "Current coordinates loaded into the forms.";
+                        status.textContent = submitForm
+                            ? "Current coordinates loaded. Refreshing prayer times..."
+                            : "Current coordinates loaded into the forms.";
+                        if (submitForm && prayerForm) {
+                            prayerForm.requestSubmit();
+                        }
                     },
                     (error) => {
                         status.textContent = `Location failed: ${error.message}`;
@@ -811,8 +818,13 @@
                     {
                         enableHighAccuracy: true,
                         timeout: 10000,
+                        maximumAge: 0,
                     },
                 );
+            };
+
+            button.addEventListener("click", () => {
+                requestCurrentLocation({ submitForm: true });
             });
 
             if (labelInput) {
@@ -825,6 +837,10 @@
                 autoLabel.addEventListener("input", () => {
                     autoLabel.dataset.userEdited = "true";
                 });
+            }
+
+            if (shouldAutoRequestLocation) {
+                requestCurrentLocation({ submitForm: true });
             }
         })();
     </script>

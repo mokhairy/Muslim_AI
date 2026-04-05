@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
+import platform
+import shutil
 import socket
+import subprocess
+import tempfile
+import threading
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import date
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
@@ -59,6 +65,8 @@ ADHAN_STREAMS = (
 SSDP_GROUP = ("239.255.255.250", 1900)
 CAST_AUDIO_CONTENT_TYPE = "audio/mpeg"
 CAST_STREAM_TYPE = "BUFFERED"
+LOCAL_SPEAKER_DEVICE_ID = "local:system_output"
+LOCAL_SPEAKER_NAME = "This machine speakers"
 
 
 class PrayerTimesServiceError(Exception):
@@ -375,6 +383,24 @@ def timings_to_map(prayer_result: PrayerTimesResult) -> dict[str, str]:
     return {item.name: item.time for item in prayer_result.timings}
 
 
+def ensure_local_speaker_device() -> SpeakerDevice:
+    device, _ = SpeakerDevice.objects.update_or_create(
+        device_id=LOCAL_SPEAKER_DEVICE_ID,
+        defaults={
+            "protocol": "local",
+            "name": LOCAL_SPEAKER_NAME,
+            "host": None,
+            "port": None,
+            "device_type": "System audio output",
+            "model_name": platform.system() or "Local machine",
+            "location_url": "",
+            "is_group": False,
+            "is_available": True,
+        },
+    )
+    return device
+
+
 def _safe_cast_attr(cast: Any, attr_path: str, default: Any = None) -> Any:
     current = cast
     for attr_name in attr_path.split("."):
@@ -497,15 +523,24 @@ def discover_dlna_devices(timeout: float = 3.0) -> list[DiscoveredDevice]:
 
 
 def refresh_discovered_devices(timeout: float = 4) -> list[SpeakerDevice]:
+    local_device = ensure_local_speaker_device()
     try:
         discovered = [
+            DiscoveredDevice(
+                protocol=local_device.protocol,
+                device_id=local_device.device_id,
+                name=local_device.name,
+                device_type=local_device.device_type,
+                model_name=local_device.model_name,
+                is_group=local_device.is_group,
+            ),
             *discover_cast_devices(timeout=timeout),
             *discover_dlna_devices(timeout=timeout),
         ]
     except Exception as exc:  # pragma: no cover
         raise DeviceDiscoveryError("Unable to scan the local network for speakers.") from exc
     discovered_ids = {device.device_id for device in discovered}
-    SpeakerDevice.objects.update(is_available=False)
+    SpeakerDevice.objects.exclude(device_id=LOCAL_SPEAKER_DEVICE_ID).update(is_available=False)
     now = timezone.now()
     for device in discovered:
         SpeakerDevice.objects.update_or_create(
@@ -526,6 +561,67 @@ def refresh_discovered_devices(timeout: float = 4) -> list[SpeakerDevice]:
     if not discovered_ids:
         return []
     return list(SpeakerDevice.objects.filter(device_id__in=discovered_ids).order_by("name"))
+
+
+def _local_audio_player_command(audio_path: str) -> list[str]:
+    system_name = platform.system()
+    if system_name == "Darwin":
+        return ["/usr/bin/afplay", audio_path]
+    if system_name == "Linux":
+        for command in (
+            ["ffplay", "-nodisp", "-autoexit", "-loglevel", "error", audio_path],
+            ["paplay", audio_path],
+            ["aplay", audio_path],
+        ):
+            if shutil.which(command[0]):
+                return command
+    raise DeviceBroadcastError(
+        f"Local speaker playback is not supported on {system_name or 'this platform'}."
+    )
+
+
+def _download_stream_to_temp_file(stream_url: str) -> str:
+    suffix = Path(urlparse(stream_url).path).suffix or ".mp3"
+    request = Request(
+        stream_url,
+        headers={
+            "User-Agent": "MuslimAI/1.0 (local audio playback)",
+        },
+    )
+    try:
+        with urlopen(request, timeout=15) as response, tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=suffix,
+        ) as temp_file:
+            shutil.copyfileobj(response, temp_file)
+            return temp_file.name
+    except Exception as exc:  # pragma: no cover
+        raise DeviceBroadcastError(
+            "Unable to download the adhan stream for local playback."
+        ) from exc
+
+
+def _play_downloaded_audio(command: list[str], audio_path: str) -> None:
+    try:
+        subprocess.run(
+            command,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    finally:
+        Path(audio_path).unlink(missing_ok=True)
+
+
+def _cast_to_local_output(device: SpeakerDevice, stream_url: str) -> None:
+    audio_path = _download_stream_to_temp_file(stream_url)
+    command = _local_audio_player_command(audio_path)
+    playback_thread = threading.Thread(
+        target=_play_downloaded_audio,
+        args=(command, audio_path),
+        daemon=True,
+    )
+    playback_thread.start()
 
 
 def _chromecast_for_device(device: SpeakerDevice):
@@ -639,6 +735,7 @@ def _cast_to_dlna(device: SpeakerDevice, stream_url: str) -> None:
 
 
 def broadcast_stream_to_devices(stream_url: str, device_ids: list[str]) -> dict[str, list[str]]:
+    ensure_local_speaker_device()
     results = {"successes": [], "errors": []}
     for device in SpeakerDevice.objects.filter(device_id__in=device_ids, is_available=True):
         try:
@@ -646,6 +743,8 @@ def broadcast_stream_to_devices(stream_url: str, device_ids: list[str]) -> dict[
                 _cast_to_chromecast(device, stream_url)
             elif device.protocol == "dlna":
                 _cast_to_dlna(device, stream_url)
+            elif device.protocol == "local":
+                _cast_to_local_output(device, stream_url)
             else:
                 raise DeviceBroadcastError(f"Unsupported device protocol: {device.protocol}.")
             results["successes"].append(device.name)

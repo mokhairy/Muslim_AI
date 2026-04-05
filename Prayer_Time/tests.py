@@ -11,6 +11,8 @@ from django.urls import reverse
 from .automation import process_automation_tick
 from .models import PrayerAutomationSetting, SpeakerDevice, SpeakerGroupPreset
 from .services import (
+    LOCAL_SPEAKER_DEVICE_ID,
+    LOCAL_SPEAKER_NAME,
     PrayerCalendarDay,
     PrayerCalendarResult,
     PrayerTimesResult,
@@ -20,6 +22,8 @@ from .services import (
     ReverseGeocodeResult,
     _cast_to_chromecast,
     _chromecast_for_device,
+    broadcast_stream_to_devices,
+    refresh_discovered_devices,
 )
 
 
@@ -101,10 +105,35 @@ class PrayerTimesViewTests(TestCase):
     def test_page_renders_without_lookup(self):
         response = self.client.get(reverse("Prayer_Time:home"))
         self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["auto_request_current_location"])
+        self.assertEqual(
+            response.context["lookup_form"]["prayer_date"].value(),
+            date.today(),
+        )
         self.assertContains(response, "Prayer Times")
         self.assertContains(response, "Use Current Location")
         self.assertContains(response, "Adhan Streams")
         self.assertContains(response, "Automatic Adhan")
+        self.assertContains(response, "const shouldAutoRequestLocation = true;")
+        self.assertContains(response, 'requestCurrentLocation({ submitForm: true });')
+        self.assertContains(response, LOCAL_SPEAKER_NAME)
+        self.assertEqual(
+            response.context["automation_form"].initial["selected_device_ids"],
+            [LOCAL_SPEAKER_DEVICE_ID],
+        )
+
+    def test_lookup_disables_auto_geolocation_default(self):
+        response = self.client.get(
+            reverse("Prayer_Time:home"),
+            {
+                "prayer_date": "2026-03-15",
+                "latitude": "23.588",
+                "longitude": "58.383",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["auto_request_current_location"])
+        self.assertContains(response, "const shouldAutoRequestLocation = false;")
 
     @patch("Prayer_Time.views.fetch_qibla_direction")
     @patch("Prayer_Time.views.reverse_geocode_location")
@@ -129,6 +158,13 @@ class PrayerTimesViewTests(TestCase):
         self.assertContains(response, "Muscat, Oman")
         self.assertContains(response, 'id="qibla-map"')
         self.assertContains(response, "Current location map")
+
+    def test_qibla_page_auto_requests_location_without_lookup(self):
+        response = self.client.get(reverse("Prayer_Time:qibla"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["auto_request_current_location"])
+        self.assertContains(response, "const shouldAutoRequestLocation = true;")
+        self.assertContains(response, 'requestCurrentLocation({ submitForm: true });')
 
     @patch("Prayer_Time.views.fetch_prayer_calendar")
     @patch("Prayer_Time.views.fetch_qibla_direction")
@@ -448,6 +484,43 @@ class PrayerTimesViewTests(TestCase):
 
 
 class BroadcastServiceTests(TestCase):
+    @patch("Prayer_Time.services._cast_to_local_output")
+    def test_broadcast_to_local_machine_uses_local_protocol_handler(self, local_output_mock):
+        SpeakerDevice.objects.create(
+            protocol="local",
+            device_id=LOCAL_SPEAKER_DEVICE_ID,
+            name=LOCAL_SPEAKER_NAME,
+            is_available=True,
+        )
+
+        results = broadcast_stream_to_devices(
+            "https://www.islamcan.com/audio/adhan/azan1.mp3",
+            [LOCAL_SPEAKER_DEVICE_ID],
+        )
+
+        local_output_mock.assert_called_once()
+        self.assertEqual(results["successes"], [LOCAL_SPEAKER_NAME])
+        self.assertEqual(results["errors"], [])
+
+    @patch("Prayer_Time.services.discover_dlna_devices")
+    @patch("Prayer_Time.services.discover_cast_devices")
+    def test_refresh_discovered_devices_keeps_local_output_available(
+        self,
+        discover_cast_mock,
+        discover_dlna_mock,
+    ):
+        discover_cast_mock.return_value = []
+        discover_dlna_mock.return_value = []
+
+        devices = refresh_discovered_devices()
+
+        self.assertEqual(len(devices), 1)
+        self.assertEqual(devices[0].device_id, LOCAL_SPEAKER_DEVICE_ID)
+        self.assertEqual(devices[0].name, LOCAL_SPEAKER_NAME)
+        self.assertTrue(
+            SpeakerDevice.objects.get(device_id=LOCAL_SPEAKER_DEVICE_ID).is_available
+        )
+
     @patch("Prayer_Time.services.quick_play")
     @patch("Prayer_Time.services._chromecast_for_device")
     def test_cast_to_chromecast_uses_buffered_mpeg_payload(

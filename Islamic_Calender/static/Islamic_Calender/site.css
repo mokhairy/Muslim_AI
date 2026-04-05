@@ -239,8 +239,8 @@ button,
 
 button:hover,
 .calendar-nav a:hover {
-    background: #264d42;
-    border-color: #264d42;
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
 }
 
 .prayer-form-actions {
@@ -1180,61 +1180,65 @@ button:hover,
 /* Modern app-shell override */
 
 :root {
-    --ui-font: "Avenir Next", "Segoe UI Variable", "Segoe UI", sans-serif;
-    --display-font: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
-    --brand-font: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-    --brand-mode-text: #10172a;
-    --brand-mode-muted: #4f5e7b;
+    --ui-font: "IBM Plex Sans", "Avenir Next", "Segoe UI Variable", "Segoe UI", sans-serif;
+    --display-font: "Syne", "Avenir Next", "Segoe UI Variable", sans-serif;
+    --brand-font: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    --brand-mode-text: #1a132f;
+    --brand-mode-muted: #6f5f77;
     --bg-canvas:
-        radial-gradient(circle at top left, rgba(27, 184, 173, 0.18), transparent 24%),
-        radial-gradient(circle at top right, rgba(255, 122, 89, 0.18), transparent 28%),
-        linear-gradient(180deg, #f7fbff, #eef4ff 42%, #f8f2ea 100%);
-    --bg-elevated: rgba(255, 255, 255, 0.72);
-    --bg-elevated-strong: rgba(255, 255, 255, 0.88);
+        radial-gradient(circle at top left, rgba(255, 159, 28, 0.2), transparent 26%),
+        radial-gradient(circle at top right, rgba(46, 196, 182, 0.18), transparent 24%),
+        radial-gradient(circle at bottom left, rgba(231, 29, 54, 0.1), transparent 24%),
+        linear-gradient(180deg, #fff8ef, #fff2da 42%, #fffaf4 100%);
+    --bg-elevated: rgba(255, 250, 242, 0.8);
+    --bg-elevated-strong: rgba(255, 251, 246, 0.92);
     --sidebar-bg:
-        linear-gradient(180deg, rgba(14, 29, 60, 0.96), rgba(33, 48, 99, 0.96)),
-        radial-gradient(circle at top left, rgba(27, 184, 173, 0.25), transparent 30%);
-    --sidebar-border: rgba(255, 255, 255, 0.1);
-    --text: #172033;
-    --text-soft: #5a6887;
-    --heading: #10172a;
-    --accent: #1bb8ad;
-    --accent-strong: #138d84;
-    --accent-2: #ff7a59;
-    --accent-3: #6d5efc;
-    --panel-border: rgba(109, 94, 252, 0.12);
-    --panel-shadow: 0 24px 54px rgba(17, 29, 68, 0.12);
-    --panel-shadow-soft: 0 14px 30px rgba(17, 29, 68, 0.08);
-    --line: rgba(23, 32, 51, 0.08);
-    --line-strong: rgba(23, 32, 51, 0.18);
-    --danger: #d74857;
-    --danger-soft: rgba(215, 72, 87, 0.12);
-    --success-soft: rgba(27, 184, 173, 0.12);
+        radial-gradient(circle at top left, rgba(255, 159, 28, 0.24), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(46, 196, 182, 0.18), transparent 26%),
+        linear-gradient(180deg, rgba(26, 19, 47, 0.98), rgba(52, 31, 77, 0.98));
+    --sidebar-border: rgba(255, 255, 255, 0.08);
+    --text: #2c2143;
+    --text-soft: #695d76;
+    --heading: #1a132f;
+    --accent: #ff9f1c;
+    --accent-strong: #e18000;
+    --accent-2: #2ec4b6;
+    --accent-3: #e71d36;
+    --panel-border: rgba(231, 29, 54, 0.08);
+    --panel-shadow: 0 24px 54px rgba(53, 31, 77, 0.16);
+    --panel-shadow-soft: 0 14px 30px rgba(53, 31, 77, 0.1);
+    --line: rgba(44, 33, 67, 0.08);
+    --line-strong: rgba(44, 33, 67, 0.16);
+    --danger: #c93d47;
+    --danger-soft: rgba(201, 61, 71, 0.12);
+    --success-soft: rgba(46, 196, 182, 0.14);
 }
 
 :root[data-theme="dark"] {
-    --brand-mode-text: #f3f7ff;
-    --brand-mode-muted: #b9c7e6;
+    --brand-mode-text: #fff2de;
+    --brand-mode-muted: #d8c7bd;
     --bg-canvas:
-        radial-gradient(circle at top left, rgba(27, 184, 173, 0.18), transparent 28%),
-        radial-gradient(circle at top right, rgba(255, 122, 89, 0.16), transparent 22%),
-        linear-gradient(180deg, #07101f, #0d1830 48%, #16142a 100%);
-    --bg-elevated: rgba(11, 22, 44, 0.76);
-    --bg-elevated-strong: rgba(14, 26, 51, 0.9);
+        radial-gradient(circle at top left, rgba(255, 159, 28, 0.16), transparent 24%),
+        radial-gradient(circle at top right, rgba(46, 196, 182, 0.14), transparent 22%),
+        radial-gradient(circle at bottom left, rgba(231, 29, 54, 0.12), transparent 22%),
+        linear-gradient(180deg, #120d20, #1a132f 48%, #241733 100%);
+    --bg-elevated: rgba(28, 18, 44, 0.82);
+    --bg-elevated-strong: rgba(34, 22, 54, 0.92);
     --sidebar-bg:
-        linear-gradient(180deg, rgba(5, 11, 24, 0.98), rgba(11, 22, 44, 0.96)),
-        radial-gradient(circle at top left, rgba(27, 184, 173, 0.22), transparent 28%);
+        radial-gradient(circle at top left, rgba(255, 159, 28, 0.2), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(46, 196, 182, 0.14), transparent 24%),
+        linear-gradient(180deg, rgba(11, 8, 20, 0.98), rgba(26, 19, 47, 0.96));
     --sidebar-border: rgba(255, 255, 255, 0.08);
-    --text: #edf3ff;
-    --text-soft: #a0b0d4;
+    --text: #fff5eb;
+    --text-soft: #ccbfc5;
     --heading: #ffffff;
     --panel-border: rgba(255, 255, 255, 0.08);
-    --panel-shadow: 0 24px 56px rgba(0, 0, 0, 0.28);
-    --panel-shadow-soft: 0 16px 32px rgba(0, 0, 0, 0.22);
+    --panel-shadow: 0 24px 56px rgba(0, 0, 0, 0.3);
+    --panel-shadow-soft: 0 16px 32px rgba(0, 0, 0, 0.24);
     --line: rgba(255, 255, 255, 0.08);
     --line-strong: rgba(255, 255, 255, 0.18);
-    --danger-soft: rgba(215, 72, 87, 0.16);
-    --success-soft: rgba(27, 184, 173, 0.16);
+    --danger-soft: rgba(201, 61, 71, 0.18);
+    --success-soft: rgba(46, 196, 182, 0.18);
 }
 
 html,
@@ -1335,7 +1339,7 @@ h3 {
     height: 64px;
     flex: none;
     border-radius: 1.1rem;
-    box-shadow: 0 18px 34px rgba(15, 118, 110, 0.22);
+    box-shadow: 0 18px 34px color-mix(in srgb, var(--accent) 26%, transparent);
 }
 
 .sidebar-kicker,
@@ -1354,7 +1358,7 @@ h3 {
     font-weight: 800;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: rgba(151, 234, 226, 0.88);
+    color: color-mix(in srgb, var(--accent) 68%, white);
 }
 
 .sidebar-title {
@@ -1404,8 +1408,12 @@ h3 {
 }
 
 .nav-cluster.is-active {
-    border-color: rgba(27, 184, 173, 0.48);
-    background: linear-gradient(180deg, rgba(27, 184, 173, 0.12), rgba(255, 255, 255, 0.04));
+    border-color: color-mix(in srgb, var(--accent) 42%, white);
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--accent) 16%, transparent),
+        rgba(255, 255, 255, 0.04)
+    );
 }
 
 .nav-cluster-title {
@@ -1487,7 +1495,7 @@ h3 {
     height: 78px;
     flex: none;
     border-radius: 1.3rem;
-    box-shadow: 0 22px 42px rgba(15, 118, 110, 0.2);
+    box-shadow: 0 22px 42px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .app-topbar-copyblock {

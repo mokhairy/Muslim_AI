@@ -27,6 +27,7 @@ from .services import (
     PrayerTimesServiceError,
     ReverseGeocodeServiceError,
     broadcast_stream_to_devices,
+    ensure_local_speaker_device,
     fetch_prayer_calendar,
     fetch_prayer_times,
     fetch_qibla_direction,
@@ -51,6 +52,12 @@ def _group_choices() -> list[tuple[str, str]]:
     return [(str(group.pk), group.name) for group in SpeakerGroupPreset.objects.order_by("name")]
 
 
+def _default_selected_device_ids(selected_device_ids: list[str] | None) -> list[str]:
+    if selected_device_ids:
+        return list(selected_device_ids)
+    return [ensure_local_speaker_device().device_id]
+
+
 def _automation_initial(
     settings: PrayerAutomationSetting,
     prayer_result=None,
@@ -66,7 +73,7 @@ def _automation_initial(
         "latitude": settings.latitude,
         "longitude": settings.longitude,
         "selected_stream_url": stream_url,
-        "selected_device_ids": (
+        "selected_device_ids": _default_selected_device_ids(
             selected_device_ids if selected_device_ids is not None else settings.selected_device_ids
         ),
         "enabled_prayers": settings.enabled_prayers or list(AUTOMATED_PRAYER_NAMES),
@@ -481,6 +488,7 @@ def _build_prayer_dashboard_outcome(
 
 
 def prayer_times(request: HttpRequest) -> HttpResponse:
+    ensure_local_speaker_device()
     current_calendar_mode = get_calendar_mode(
         request.GET.get("calendar_mode")
         or request.POST.get("calendar_mode")
@@ -493,7 +501,7 @@ def prayer_times(request: HttpRequest) -> HttpResponse:
     lookup_form = PrayerTimesLookupForm(
         request.GET if lookup_requested else None,
         initial={
-            "prayer_date": None,
+            "prayer_date": timezone.localdate(),
             "latitude": automation_setting.latitude,
             "longitude": automation_setting.longitude,
             "location_label": automation_setting.location_label,
@@ -505,7 +513,9 @@ def prayer_times(request: HttpRequest) -> HttpResponse:
     service_error = None
     automation_message = None
     broadcast_results = None
-    current_selected_device_ids = list(automation_setting.selected_device_ids)
+    current_selected_device_ids = _default_selected_device_ids(
+        list(automation_setting.selected_device_ids)
+    )
     resolved_automation_location_label = automation_setting.location_label
 
     lookup_outcome = _perform_prayer_lookup(
@@ -531,11 +541,16 @@ def prayer_times(request: HttpRequest) -> HttpResponse:
         action = request.POST.get("action")
         if action == "scan_devices":
             try:
-                refresh_discovered_devices()
+                discovered_devices = refresh_discovered_devices()
                 device_choices = _device_choices()
                 group_choices = _group_choices()
+                network_device_count = sum(
+                    1 for device in discovered_devices if device.protocol != "local"
+                )
                 automation_message = (
-                    f"Scan complete. Found {len(device_choices)} Cast or DLNA speaker targets."
+                    "Scan complete. "
+                    f"Found {network_device_count} Cast or DLNA speaker target(s); "
+                    "local machine output remains available."
                 )
             except DeviceDiscoveryError as exc:
                 service_error = str(exc)
@@ -642,6 +657,7 @@ def prayer_times(request: HttpRequest) -> HttpResponse:
         "active_page": "prayers",
         "active_timezone": active_timezone,
         "adhan_streams": ADHAN_STREAMS,
+        "auto_request_current_location": request.method == "GET" and not lookup_requested,
         "automation_form": automation_form,
         "automation_message": automation_message,
         "automation_setting": automation_setting,
@@ -665,6 +681,7 @@ def prayer_times(request: HttpRequest) -> HttpResponse:
         "qibla_result": dashboard_outcome.qibla_result,
         "available_devices": available_devices,
         "custom_prayer_streams": _custom_prayer_streams(automation_setting),
+        "current_selected_device_ids": current_selected_device_ids,
         "resolved_automation_location_label": resolved_automation_location_label,
         "speaker_groups": speaker_groups,
         "selected_devices": selected_devices,
@@ -710,6 +727,7 @@ def qibla(request: HttpRequest) -> HttpResponse:
 
     context = {
         "active_page": "qibla",
+        "auto_request_current_location": not lookup_requested,
         "current_calendar_mode": current_calendar_mode,
         "today_record": today_record(current_calendar_mode),
         "qibla_form": qibla_form,

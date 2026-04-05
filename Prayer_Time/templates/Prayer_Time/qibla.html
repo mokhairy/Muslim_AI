@@ -191,6 +191,8 @@
 
     <script>
         (() => {
+            const shouldAutoRequestLocation = {{ auto_request_current_location|yesno:"true,false" }};
+            const qiblaForm = document.getElementById("qibla-form");
             const button = document.getElementById("use-qibla-location-button");
             const status = document.getElementById("qibla-geo-status");
             const latitudeInput = document.getElementById("id_latitude");
@@ -255,29 +257,47 @@
                 return;
             }
 
-            button.addEventListener("click", () => {
-                status.textContent = "Requesting current location...";
+            const requestCurrentLocation = ({ submitForm = false } = {}) => {
+                status.textContent = submitForm
+                    ? "Requesting current location and loading qibla..."
+                    : "Requesting current location...";
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         latitudeInput.value = position.coords.latitude.toFixed(6);
                         longitudeInput.value = position.coords.longitude.toFixed(6);
-                        if (labelInput && !labelInput.value.trim()) {
-                            labelInput.value = "Current location";
+                        if (labelInput && !labelInput.dataset.userEdited) {
+                            labelInput.value = "";
                         }
                         syncMap(latitudeInput.value, longitudeInput.value, labelInput?.value);
-                        status.textContent = "Location captured. Submit to load the qibla direction.";
+                        status.textContent = submitForm
+                            ? "Location captured. Refreshing qibla direction..."
+                            : "Location captured. Submit to load the qibla direction.";
+                        if (submitForm && qiblaForm) {
+                            qiblaForm.requestSubmit();
+                        }
                     },
                     (error) => {
                         status.textContent = `Location request failed: ${error.message}`;
                     },
                     { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
                 );
+            };
+
+            button.addEventListener("click", () => {
+                requestCurrentLocation({ submitForm: true });
             });
 
             latitudeInput.addEventListener("change", () => syncMap(latitudeInput.value, longitudeInput.value, labelInput?.value));
             longitudeInput.addEventListener("change", () => syncMap(latitudeInput.value, longitudeInput.value, labelInput?.value));
             if (labelInput) {
+                labelInput.addEventListener("input", () => {
+                    labelInput.dataset.userEdited = "true";
+                });
                 labelInput.addEventListener("change", () => syncMap(latitudeInput.value, longitudeInput.value, labelInput.value));
+            }
+
+            if (shouldAutoRequestLocation) {
+                requestCurrentLocation({ submitForm: true });
             }
         })();
     </script>

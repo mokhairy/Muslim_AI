@@ -7,22 +7,22 @@
     <title>{% block title %}Muslim AI Calendar{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Syne:wght@500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'Islamic_Calender/site.css' %}">
 </head>
-<body>
+<body class="brand-variant-saffron-grid">
     <div class="app-shell">
         <aside class="app-sidebar">
             <div class="sidebar-brand">
                 <div class="sidebar-brandline">
-                    <img class="sidebar-logo" src="{% static 'Islamic_Calender/branding/aurora-arch.svg' %}" alt="Muslim AI Aurora Arch logo">
+                    <img class="sidebar-logo" src="{% static 'Islamic_Calender/branding/saffron-grid.svg' %}" alt="Muslim AI Saffron Grid logo">
                     <div>
-                        <p class="sidebar-kicker">Aurora Arch</p>
+                        <p class="sidebar-kicker">Saffron Grid</p>
                         <p class="sidebar-title">Muslim AI</p>
                     </div>
                 </div>
                 <p class="sidebar-copy">
-                    Islamic knowledge hub for calendar tracking, azan workflows, Quran study, and hadith reference.
+                    Modern Muslim intelligence for prayer workflows, Quran study, hadith reference, and calendar tracking.
                 </p>
                 <div class="sidebar-utility-links">
                     <a class="sidebar-utility-link{% if active_page == 'branding' %} active{% endif %}" href="{% url 'Islamic_Calender:branding' %}?calendar_mode={{ current_calendar_mode.slug }}">Brand Kits</a>
@@ -77,12 +77,12 @@
         <main class="page-shell">
             <header class="app-topbar panel">
                 <div class="app-topbar-brand">
-                    <img class="app-topbar-logo" src="{% static 'Islamic_Calender/branding/aurora-arch.svg' %}" alt="Muslim AI logo">
+                    <img class="app-topbar-logo" src="{% static 'Islamic_Calender/branding/saffron-grid.svg' %}" alt="Muslim AI Saffron Grid logo">
                     <div class="app-topbar-copyblock">
-                        <p class="eyebrow">Aurora Arch Identity</p>
+                        <p class="eyebrow">Saffron Grid Identity</p>
                         <h2 class="app-topbar-title">Muslim AI</h2>
                         <p class="app-topbar-copy">
-                            Unified Islamic toolkit for prayer, Quran, hadith, and calendar workflows.
+                            Search, listen, track, and organize your Islamic workflow from one product surface.
                         </p>
                     </div>
                 </div>

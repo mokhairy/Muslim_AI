@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mkhairy.muslim-ai.web</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/ABSOLUTE/PATH/TO/Muslim_AI/.venv/bin/python</string>
+        <string>-m</string>
+        <string>gunicorn</string>
+        <string>Muslim_AI.wsgi:application</string>
+        <string>--bind</string>
+        <string>0.0.0.0:8888</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/ABSOLUTE/PATH/TO/Muslim_AI</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>DJANGO_SETTINGS_MODULE</key>
+        <string>Muslim_AI.settings_development</string>
+        <key>DJANGO_SECRET_KEY</key>
+        <string>dev-only-secret-key</string>
+        <key>DJANGO_ALLOWED_HOSTS</key>
+        <string>*</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/YOUR_USER/Library/Logs/Muslim_AI/web.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/YOUR_USER/Library/Logs/Muslim_AI/web-error.log</string>
+</dict>
+</plist>
