@@ -22,7 +22,7 @@ STORAGES = {
     },
 }
 
-if SECRET_KEY == "dev-only-secret-key-change-me":  # noqa: F405
+if not os.getenv("DJANGO_SECRET_KEY"):
     raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set for production.")
 
 if not ALLOWED_HOSTS:  # noqa: F405
