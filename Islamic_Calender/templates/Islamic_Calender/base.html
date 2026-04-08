@@ -55,11 +55,10 @@
                     </div>
                 </section>
 
-                <section class="nav-cluster{% if active_page == 'quran_text' or active_page == 'quran_audio' or active_page == 'tafsir' %} is-active{% endif %}">
+                <section class="nav-cluster{% if active_page == 'quran_text' or active_page == 'tafsir' %} is-active{% endif %}">
                     <p class="nav-cluster-title">Quran</p>
                     <div class="nav-subitems">
-                        <a class="sidebar-link{% if active_page == 'quran_text' %} active{% endif %}" href="{% url 'Quran_Text:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Quran Text</a>
-                        <a class="sidebar-link{% if active_page == 'quran_audio' %} active{% endif %}" href="{% url 'Quran_Audio:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Quran Audio</a>
+                        <a class="sidebar-link{% if active_page == 'quran_text' %} active{% endif %}" href="{% url 'Quran_Text:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Read &amp; Listen</a>
                         <a class="sidebar-link{% if active_page == 'tafsir' %} active{% endif %}" href="{% url 'Tafsir:home' %}?calendar_mode={{ current_calendar_mode.slug }}">Tafsir</a>
                     </div>
                 </section>

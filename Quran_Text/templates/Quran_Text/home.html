@@ -1,89 +1,368 @@
 {% extends "Islamic_Calender/base.html" %}
 
-{% block title %}Quran | Muslim AI{% endblock %}
+{% block title %}Quran Reader | Muslim AI{% endblock %}
 
 {% block content %}
     <section class="hero">
-        <p class="eyebrow">alquran.cloud</p>
-        <h1>Quran Text Explorer</h1>
+        <p class="eyebrow">alquran.cloud + cdn.islamic.network</p>
+        <h1>Quran Reader</h1>
         <p class="intro">
-            This Quran page now uses <a href="https://alquran.cloud/api" target="_blank" rel="noreferrer">alquran.cloud</a>
-            only. Select a surah and translation edition to read Arabic text alongside the chosen translation.
+            Read, listen, or follow the recitation ayah by ayah from one mobile-friendly Quran surface.
+            The layout is organized by surah, keeps the selected Sheikh in the primary controls,
+            and supports synchronized verse highlighting while audio is playing.
         </p>
     </section>
 
-    <section class="lookup-grid">
-        <form method="get" class="panel form-panel">
-            <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
-            <h2>Lookup Surah</h2>
-            <p>
-                <label for="id_surah">Surah Number</label>
-                <input id="id_surah" type="number" name="surah" min="1" max="114" value="{{ surah_number }}">
-            </p>
-            <p>
-                <label for="id_edition">Translation Edition</label>
-                <select id="id_edition" name="edition">
-                    {% for value, label in edition_options %}
-                    <option value="{{ value }}"{% if value == selected_edition %} selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </p>
-            <div class="prayer-form-actions">
-                <button type="submit">Load Surah</button>
-            </div>
-            {% if service_error %}
-            <p class="service-error">{{ service_error }}</p>
-            {% endif %}
-        </form>
+    <section class="quran-reader-page" data-quran-reader data-mode="{{ selected_mode }}">
+        <section class="lookup-grid quran-reader-top">
+            <form method="get" class="panel form-panel quran-reader-form">
+                <input type="hidden" name="calendar_mode" value="{{ current_calendar_mode.slug }}">
+                <input type="hidden" name="mode" value="{{ selected_mode }}" id="id_mode">
+                <div class="quran-reader-form-head">
+                    <div>
+                        <p class="panel-label">Access Mode</p>
+                        <h2>Read the Quran your way</h2>
+                    </div>
+                    <p class="mode-copy">
+                        Switch between a pure reading surface, a player-led listening view, or synchronized follow along.
+                    </p>
+                </div>
 
-        <article class="panel result-panel">
-            <div>
-                <p class="panel-label">Source</p>
-                <p class="result-main">api.alquran.cloud</p>
+                <div class="quran-mode-switch" role="tablist" aria-label="Quran reader modes">
+                    {% for item in reader_modes %}
+                    <button
+                        type="button"
+                        class="quran-mode-chip{% if item.slug == selected_mode %} is-active{% endif %}"
+                        data-mode-select="{{ item.slug }}"
+                        aria-pressed="{% if item.slug == selected_mode %}true{% else %}false{% endif %}"
+                    >
+                        {{ item.label }}
+                    </button>
+                    {% endfor %}
+                </div>
+
+                <div class="quran-reader-fields">
+                    <p>
+                        <label for="id_surah">Surah</label>
+                        <select id="id_surah" name="surah">
+                            {% for surah in surah_options %}
+                            <option value="{{ surah.number }}"{% if surah.number == surah_number %} selected{% endif %}>
+                                {{ surah.number }}. {{ surah.englishName }}{% if surah.englishNameTranslation %} · {{ surah.englishNameTranslation }}{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </p>
+                    <p>
+                        <label for="id_translation">Translation</label>
+                        <select id="id_translation" name="translation">
+                            {% for value, label in translation_options %}
+                            <option value="{{ value }}"{% if value == selected_translation %} selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </p>
+                    <p>
+                        <label for="id_reader">Sheikh</label>
+                        <select id="id_reader" name="reader">
+                            {% for value, label in audio_options %}
+                            <option value="{{ value }}"{% if value == selected_audio_edition %} selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </p>
+                </div>
+
+                <div class="prayer-form-actions">
+                    <button type="submit">Open Surah</button>
+                </div>
+                {% if service_error %}
+                <p class="service-error">{{ service_error }}</p>
+                {% endif %}
+            </form>
+
+            <article class="panel quran-reader-summary">
+                <div class="quran-summary-copy">
+                    <p class="panel-label">Structure</p>
+                    <h2>
+                        {% if surah_data %}
+                        {{ surah_data.number }}. {{ surah_data.englishName }}
+                        {% if surah_data.englishNameTranslation %}<span>{{ surah_data.englishNameTranslation }}</span>{% endif %}
+                        {% else %}
+                        Surah {{ surah_number }}
+                        {% endif %}
+                    </h2>
+                    {% if surah_data %}
+                    <p class="quran-arabic-surah">{{ surah_data.name }}</p>
+                    {% endif %}
+                    <p class="intro">
+                        Popular Quran apps keep the Quran organized around surah-level navigation, a persistent player,
+                        and clean ayah cards. This page follows that structure so the same mental model works later on Android and iOS.
+                    </p>
+                </div>
+
+                <div class="quran-meta-grid">
+                    {% for item in meta_cards %}
+                    <div class="quran-meta-card">
+                        <p class="panel-label">{{ item.label }}</p>
+                        <p class="result-main">{{ item.value }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+
+        {% if ayah_entries %}
+        <section class="panel quran-player-panel{% if not player_available %} is-disabled{% endif %}">
+            <div class="quran-player-head">
+                <div>
+                    <p class="panel-label">Player</p>
+                    <h2>Sheikh-led playback with follow along</h2>
+                </div>
+                <p class="audio-copy">
+                    Choose a Sheikh, play the surah continuously, and keep the active ayah highlighted while the recitation advances.
+                </p>
             </div>
-            <div>
-                <p class="panel-label">Surah</p>
-                <p class="result-main">{% if surah_data %}{{ surah_data.englishName }}{% else %}{{ surah_number }}{% endif %}</p>
+
+            <div class="quran-player-shell">
+                <div class="quran-now-playing">
+                    <p class="panel-label">Now Playing</p>
+                    <h3 id="quran-now-playing-title">
+                        {% if surah_data %}{{ surah_data.englishName }}{% else %}Current Surah{% endif %}
+                    </h3>
+                    <p id="quran-now-playing-meta" class="quran-now-playing-meta">
+                        {% if player_available %}Ayah 1{% else %}Audio unavailable for this selection{% endif %}
+                    </p>
+                </div>
+
+                <div class="quran-player-controls">
+                    <button type="button" class="quran-control-button" id="quran-prev-button" {% if not player_available %}disabled{% endif %}>Previous</button>
+                    <button type="button" class="quran-control-button" id="quran-play-button" {% if not player_available %}disabled{% endif %}>Play</button>
+                    <button type="button" class="quran-control-button quran-control-button-ghost" id="quran-next-button" {% if not player_available %}disabled{% endif %}>Next</button>
+                    <label class="quran-speed-control" for="quran-playback-rate">
+                        Speed
+                        <select id="quran-playback-rate" {% if not player_available %}disabled{% endif %}>
+                            <option value="0.75">0.75x</option>
+                            <option value="1" selected>1.0x</option>
+                            <option value="1.15">1.15x</option>
+                            <option value="1.25">1.25x</option>
+                        </select>
+                    </label>
+                </div>
             </div>
-            <div>
-                <p class="panel-label">Ayat</p>
-                <p class="result-main">{% if surah_data %}{{ surah_data.numberOfAyahs }}{% else %}--{% endif %}</p>
-            </div>
-            <div>
-                <p class="panel-label">Translation</p>
-                <p class="result-main">{% if surah_data and surah_data.edition %}{{ surah_data.edition.englishName|default:surah_data.edition.name }}{% else %}--{% endif %}</p>
-            </div>
-        </article>
+
+            <audio id="quran-audio-player" preload="none"></audio>
+        </section>
+
+        <section class="quran-ayah-stack">
+            {% for ayah in ayah_entries %}
+            <article
+                class="panel quran-ayah-card"
+                id="ayah-{{ ayah.number_in_surah }}"
+                data-ayah-card
+                data-ayah-number="{{ ayah.number_in_surah }}"
+            >
+                <div class="quran-ayah-topline">
+                    <div class="quran-ayah-number">{{ ayah.number_in_surah }}</div>
+                    <div class="quran-ayah-meta">
+                        {% if ayah.juz %}<span>Juz {{ ayah.juz }}</span>{% endif %}
+                        {% if ayah.page %}<span>Page {{ ayah.page }}</span>{% endif %}
+                        {% if ayah.manzil %}<span>Manzil {{ ayah.manzil }}</span>{% endif %}
+                    </div>
+                    <button
+                        type="button"
+                        class="quran-ayah-play"
+                        data-ayah-play="{{ forloop.counter0 }}"
+                        {% if not ayah.audio_url %}disabled{% endif %}
+                    >
+                        Play ayah
+                    </button>
+                </div>
+
+                <div class="quran-ayah-body">
+                    <p class="quran-ayah-arabic">{{ ayah.arabic_text }}</p>
+                    <p class="quran-ayah-translation">{{ ayah.translation_text }}</p>
+                    {% if ayah.audio_secondary_url %}
+                    <p class="audio-source">
+                        <a href="{{ ayah.audio_secondary_url }}" target="_blank" rel="noreferrer">Alternate audio</a>
+                    </p>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </section>
+        {% endif %}
     </section>
 
-    {% if surah_data and ayah_rows %}
-    <section class="panel table-panel">
-        <div class="table-header">
-            <div>
-                <p class="panel-label">Text From alquran.cloud</p>
-                <h2>{{ surah_data.englishName }}{% if surah_data.englishNameTranslation %} | {{ surah_data.englishNameTranslation }}{% endif %}</h2>
-            </div>
-        </div>
-        <div class="table-wrap">
-            <table class="analysis-table">
-                <thead>
-                    <tr>
-                        <th>Ayah</th>
-                        <th>Arabic</th>
-                        <th>Translation</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for ayah in ayah_rows %}
-                    <tr>
-                        <td><strong>{{ ayah.number_in_surah }}</strong></td>
-                        <td>{{ ayah.arabic_text }}</td>
-                        <td>{{ ayah.translation_text }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </section>
-    {% endif %}
+    {{ player_tracks|json_script:"quran-player-tracks" }}
+    <script>
+        (() => {
+            const root = document.querySelector("[data-quran-reader]");
+            if (!root) {
+                return;
+            }
+
+            const modeField = document.getElementById("id_mode");
+            const modeButtons = Array.from(document.querySelectorAll("[data-mode-select]"));
+            const audio = document.getElementById("quran-audio-player");
+            const playerTracksNode = document.getElementById("quran-player-tracks");
+            const tracks = playerTracksNode ? JSON.parse(playerTracksNode.textContent) : [];
+            const cards = Array.from(document.querySelectorAll("[data-ayah-card]"));
+            const playButtons = Array.from(document.querySelectorAll("[data-ayah-play]"));
+            const nowPlayingTitle = document.getElementById("quran-now-playing-title");
+            const nowPlayingMeta = document.getElementById("quran-now-playing-meta");
+            const playButton = document.getElementById("quran-play-button");
+            const nextButton = document.getElementById("quran-next-button");
+            const prevButton = document.getElementById("quran-prev-button");
+            const speedControl = document.getElementById("quran-playback-rate");
+
+            let currentIndex = 0;
+
+            const setMode = (mode) => {
+                root.dataset.mode = mode;
+                if (modeField) {
+                    modeField.value = mode;
+                }
+                modeButtons.forEach((button) => {
+                    const isActive = button.dataset.modeSelect === mode;
+                    button.classList.toggle("is-active", isActive);
+                    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+                });
+            };
+
+            const setActiveAyah = (index, shouldScroll) => {
+                currentIndex = index;
+                cards.forEach((card, cardIndex) => {
+                    card.classList.toggle("is-active", cardIndex === index);
+                });
+                playButtons.forEach((button, buttonIndex) => {
+                    button.classList.toggle("is-active", buttonIndex === index);
+                });
+                if (shouldScroll && cards[index]) {
+                    cards[index].scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+            };
+
+            const loadTrack = async (index, autoplay) => {
+                const track = tracks[index];
+                if (!audio || !track) {
+                    return;
+                }
+                currentIndex = index;
+                setActiveAyah(index, autoplay);
+                if (track.audioUrl && audio.src !== track.audioUrl) {
+                    audio.src = track.audioUrl;
+                    audio.load();
+                }
+                if (nowPlayingTitle) {
+                    nowPlayingTitle.textContent = track.arabicText || nowPlayingTitle.textContent;
+                }
+                if (nowPlayingMeta) {
+                    nowPlayingMeta.textContent = `Ayah ${track.ayahNumber}`;
+                }
+                if (autoplay) {
+                    try {
+                        await audio.play();
+                    } catch (error) {
+                        if (playButton) {
+                            playButton.textContent = "Play";
+                        }
+                    }
+                }
+            };
+
+            modeButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    setMode(button.dataset.modeSelect || "read_listen");
+                });
+            });
+
+            playButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    const index = Number(button.dataset.ayahPlay);
+                    if (!Number.isNaN(index)) {
+                        loadTrack(index, true);
+                    }
+                });
+            });
+
+            if (speedControl && audio) {
+                speedControl.addEventListener("change", () => {
+                    audio.playbackRate = Number(speedControl.value || "1");
+                });
+            }
+
+            if (playButton && audio) {
+                playButton.addEventListener("click", async () => {
+                    if (!tracks.length) {
+                        return;
+                    }
+                    if (!audio.src) {
+                        await loadTrack(currentIndex, true);
+                        return;
+                    }
+                    if (audio.paused) {
+                        try {
+                            await audio.play();
+                        } catch (error) {
+                            return;
+                        }
+                    } else {
+                        audio.pause();
+                    }
+                });
+            }
+
+            if (nextButton) {
+                nextButton.addEventListener("click", () => {
+                    if (!tracks.length) {
+                        return;
+                    }
+                    const nextIndex = currentIndex + 1 >= tracks.length ? 0 : currentIndex + 1;
+                    loadTrack(nextIndex, true);
+                });
+            }
+
+            if (prevButton) {
+                prevButton.addEventListener("click", () => {
+                    if (!tracks.length) {
+                        return;
+                    }
+                    const previousIndex = currentIndex - 1 < 0 ? tracks.length - 1 : currentIndex - 1;
+                    loadTrack(previousIndex, true);
+                });
+            }
+
+            if (audio) {
+                audio.addEventListener("play", () => {
+                    if (playButton) {
+                        playButton.textContent = "Pause";
+                    }
+                });
+
+                audio.addEventListener("pause", () => {
+                    if (playButton) {
+                        playButton.textContent = "Play";
+                    }
+                });
+
+                audio.addEventListener("ended", () => {
+                    if (!tracks.length) {
+                        return;
+                    }
+                    const nextIndex = currentIndex + 1;
+                    if (nextIndex < tracks.length) {
+                        loadTrack(nextIndex, true);
+                        return;
+                    }
+                    setActiveAyah(currentIndex, false);
+                    if (playButton) {
+                        playButton.textContent = "Play";
+                    }
+                });
+            }
+
+            setMode(root.dataset.mode || "read_listen");
+            if (tracks.length) {
+                loadTrack(0, false);
+            }
+        })();
+    </script>
 {% endblock %}

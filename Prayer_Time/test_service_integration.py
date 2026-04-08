@@ -15,6 +15,10 @@ from Prayer_Time.services import (
 
 
 class PrayerServiceIntegrationTests(SimpleTestCase):
+    def setUp(self) -> None:
+        clear_prayer_service_caches()
+        super().setUp()
+
     def tearDown(self) -> None:
         clear_prayer_service_caches()
         super().tearDown()
