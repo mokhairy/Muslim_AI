@@ -7,6 +7,21 @@ from .settings import *  # noqa: F403
 
 DEBUG = False
 
+MIDDLEWARE = [
+    MIDDLEWARE[0],  # noqa: F405
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    *MIDDLEWARE[1:],  # noqa: F405
+]
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
 if SECRET_KEY == "dev-only-secret-key-change-me":  # noqa: F405
     raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set for production.")
 

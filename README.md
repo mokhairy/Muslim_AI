@@ -81,6 +81,8 @@ DJANGO_SETTINGS_MODULE=Muslim_AI.settings_production ./.venv/bin/python -m gunic
 DJANGO_SETTINGS_MODULE=Muslim_AI.settings_production ./.venv/bin/python manage.py run_prayer_automation --interval 20
 ```
 
+For Railway deployments, `railway.toml` now runs `collectstatic` at build time and serves static files in production through `WhiteNoise`.
+
 Or use the helper targets:
 
 ```bash
