@@ -68,6 +68,61 @@ export const hadithCollections = [
 const AZKAR_SOURCE_URL =
   "https://raw.githubusercontent.com/nawafalqari/azkar-api/56df51279ab6eb86dc2f6202c7de26c8948331c1/azkar.json";
 
+const fallbackHadithByCollection: Record<string, HadithItem[]> = {
+  "eng-bukhari": [
+    {
+      number: 1,
+      translation:
+        "Narrated Umar ibn Al-Khattab: I heard Allah's Messenger saying that deeds are judged by intentions, and every person will have only what they intended.",
+    },
+    {
+      number: 2,
+      translation:
+        "Narrated Abu Hurairah: Faith has many branches, the highest is the declaration that there is no deity but Allah, and the lowest is removing harm from the road.",
+    },
+  ],
+  "eng-muslim": [
+    {
+      number: 1,
+      translation:
+        "Abu Hurairah reported: Whoever follows a path in pursuit of knowledge, Allah will make easy for him a path to Paradise.",
+    },
+    {
+      number: 2,
+      translation:
+        "Abu Hurairah reported: Allah does not look at your bodies or your appearances, but He looks at your hearts and your deeds.",
+    },
+  ],
+};
+
+async function fetchJsonWithTimeout<T>(
+  url: string,
+  init?: RequestInit,
+  timeoutMs = 10000,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const response = (await Promise.race([
+      fetch(url, init),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`Request timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ])) as Response;
+
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
+
+    return (await response.json()) as T;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { headers: DEFAULT_HEADERS });
   if (!response.ok) {
@@ -187,21 +242,21 @@ export async function fetchQuranSurah(
 
 export async function fetchHadithPage(collection: string, page = 1, limit = 12) {
   const url = `https://raw.githubusercontent.com/fawazahmed0/hadith-api/1/editions/${collection}/sections/1.min.json`;
-  const response = await fetch(
-    url,
-    { signal: AbortSignal.timeout(10000) },
-  );
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+  try {
+    const payload = await fetchJsonWithTimeout<Record<string, unknown>>(url, undefined, 10000);
+    const rows = Array.isArray(payload?.hadiths) ? payload.hadiths : [];
+    const start = Math.max(0, (page - 1) * limit);
+    return rows.slice(start, start + limit).map((item: Record<string, unknown>) => ({
+      number: item.hadithnumber ?? item.arabicnumber ?? "",
+      translation: item.text ?? "",
+      reference: item.reference ?? {},
+    })) as HadithItem[];
+  } catch {
+    return (fallbackHadithByCollection[collection] ?? fallbackHadithByCollection["eng-bukhari"] ?? []).slice(
+      0,
+      limit,
+    );
   }
-  const payload = (await response.json()) as Record<string, unknown>;
-  const rows = Array.isArray(payload?.hadiths) ? payload.hadiths : [];
-  const start = Math.max(0, (page - 1) * limit);
-  return rows.slice(start, start + limit).map((item: Record<string, unknown>) => ({
-    number: item.hadithnumber ?? item.arabicnumber ?? "",
-    translation: item.text ?? "",
-    reference: item.reference ?? {},
-  })) as HadithItem[];
 }
 
 function flattenAzkarEntries(node: unknown): AzkarEntry[] {

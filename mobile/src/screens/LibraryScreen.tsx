@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
-import { useEffect, useMemo, useState } from "react";
+import * as Speech from "expo-speech";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,6 +27,36 @@ const sections = [
   { value: "hisn", label: "Hisn Muslim" },
 ] as const;
 
+const readerModeOptions = [
+  { value: "read", label: "Read only" },
+  { value: "listen", label: "Listen only" },
+  { value: "read_listen", label: "Read while listening" },
+] as const;
+
+type ReaderMode = (typeof readerModeOptions)[number]["value"];
+
+function getAzkarText(entry: Record<string, unknown>): string {
+  return String(entry.zekr ?? entry.content ?? "").trim();
+}
+
+function getAzkarTitle(entry: Record<string, unknown>, index: number): string {
+  return String(entry.category ?? `Remembrance ${index + 1}`);
+}
+
+function getHadithReference(item: Record<string, unknown>): string {
+  const reference = item.reference;
+  if (!reference || typeof reference !== "object") {
+    return "";
+  }
+
+  const book = "book" in reference ? String(reference.book ?? "").trim() : "";
+  const hadith = "hadith" in reference ? String(reference.hadith ?? "").trim() : "";
+  if (book && hadith) {
+    return `Book ${book} • Hadith ${hadith}`;
+  }
+  return book || hadith;
+}
+
 export function LibraryScreen() {
   const [section, setSection] = useState<(typeof sections)[number]["value"]>("hadith");
   const [loading, setLoading] = useState(false);
@@ -37,10 +69,89 @@ export function LibraryScreen() {
   const [azkarCategories, setAzkarCategories] = useState<string[]>([]);
   const [azkarEntries, setAzkarEntries] = useState<any[]>([]);
   const [tasbihCounts, setTasbihCounts] = useState<Record<number, number>>({});
+  const [azkarMode, setAzkarMode] = useState<ReaderMode>("read_listen");
+  const [currentAzkarIndex, setCurrentAzkarIndex] = useState(0);
+  const [isAzkarPlaying, setIsAzkarPlaying] = useState(false);
+  const [azkarVoiceIdentifier, setAzkarVoiceIdentifier] = useState<string>();
+  const azkarPlaybackTokenRef = useRef(0);
 
   const [hisnCollectionId, setHisnCollectionId] = useState("27");
   const [hisnTitle, setHisnTitle] = useState("");
   const [hisnEntries, setHisnEntries] = useState<any[]>([]);
+
+  const currentAzkarEntry = azkarEntries[currentAzkarIndex] ?? null;
+
+  function stopAzkarPlayback() {
+    azkarPlaybackTokenRef.current += 1;
+    setIsAzkarPlaying(false);
+    Speech.stop();
+  }
+
+  function playAzkarEntry(index: number) {
+    const entry = azkarEntries[index];
+    const text = entry ? getAzkarText(entry) : "";
+    if (!text) {
+      return;
+    }
+
+    const nextToken = azkarPlaybackTokenRef.current + 1;
+    azkarPlaybackTokenRef.current = nextToken;
+    setCurrentAzkarIndex(index);
+    setIsAzkarPlaying(true);
+    Speech.stop();
+    Speech.speak(text, {
+      language: "ar",
+      voice: azkarVoiceIdentifier,
+      rate: 0.9,
+      pitch: 1,
+      onDone: () => {
+        if (azkarPlaybackTokenRef.current !== nextToken) {
+          return;
+        }
+        const nextIndex = index + 1;
+        if (azkarMode !== "read" && azkarEntries[nextIndex]) {
+          playAzkarEntry(nextIndex);
+          return;
+        }
+        setIsAzkarPlaying(false);
+      },
+      onStopped: () => {
+        if (azkarPlaybackTokenRef.current === nextToken) {
+          setIsAzkarPlaying(false);
+        }
+      },
+      onError: () => {
+        if (azkarPlaybackTokenRef.current === nextToken) {
+          setIsAzkarPlaying(false);
+          setError("Unable to play this remembrance on the current device voice.");
+        }
+      },
+    });
+  }
+
+  function toggleAzkarPlayback() {
+    if (isAzkarPlaying) {
+      stopAzkarPlayback();
+      return;
+    }
+    playAzkarEntry(currentAzkarIndex);
+  }
+
+  function moveAzkarSelection(direction: -1 | 1) {
+    if (!azkarEntries.length) {
+      return;
+    }
+
+    const nextIndex = Math.min(
+      Math.max(currentAzkarIndex + direction, 0),
+      Math.max(azkarEntries.length - 1, 0),
+    );
+    setCurrentAzkarIndex(nextIndex);
+
+    if (azkarMode === "listen" || isAzkarPlaying) {
+      playAzkarEntry(nextIndex);
+    }
+  }
 
   async function loadActiveSection() {
     setLoading(true);
@@ -75,6 +186,33 @@ export function LibraryScreen() {
       loadActiveSection().catch(() => null);
     }
   }, [azkarCategory]);
+
+  useEffect(() => {
+    Speech.getAvailableVoicesAsync()
+      .then((voices) => {
+        const arabicVoice = voices.find((voice) => voice.language?.toLowerCase().startsWith("ar"));
+        setAzkarVoiceIdentifier(arabicVoice?.identifier);
+      })
+      .catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    if (section !== "azkar" || azkarMode === "read") {
+      stopAzkarPlayback();
+    }
+  }, [azkarMode, section]);
+
+  useEffect(() => {
+    setCurrentAzkarIndex(0);
+    stopAzkarPlayback();
+  }, [azkarCategory, section]);
+
+  useEffect(() => {
+    return () => {
+      azkarPlaybackTokenRef.current += 1;
+      Speech.stop();
+    };
+  }, []);
 
   const completedAzkar = useMemo(
     () => Object.values(tasbihCounts).filter((value) => value > 0).length,
@@ -157,26 +295,37 @@ export function LibraryScreen() {
           ))}
 
           {hadithItems.map((item, index) => (
-            <View key={`hadith-${index}`} style={styles.readingCard}>
-              <View style={styles.readingHeader}>
-                <View>
-                  <Text style={styles.readingCaption}>Narration</Text>
-                  <Text style={styles.readingTitle}>
-                    {String(item.number ?? item.id ?? `Hadith ${index + 1}`)}
-                  </Text>
+            (() => {
+              const arabicText = String(item.arab ?? item.contents ?? "").trim();
+              const translationText = String(
+                item.terjemah ?? item.translation ?? item.contents ?? "",
+              ).trim();
+              const referenceText = getHadithReference(item);
+
+              return (
+                <View key={`hadith-${index}`} style={styles.readingCard}>
+                  <View style={styles.readingHeader}>
+                    <View>
+                      <Text style={styles.readingCaption}>Narration</Text>
+                      <Text style={styles.readingTitle}>
+                        {String(item.number ?? item.id ?? `Hadith ${index + 1}`)}
+                      </Text>
+                      {referenceText ? <Text style={styles.readingMeta}>{referenceText}</Text> : null}
+                    </View>
+                    <View style={styles.readingActions}>
+                      <Ionicons name="share-social-outline" size={18} color={palette.textMuted} />
+                      <Ionicons name="bookmark-outline" size={18} color={palette.textMuted} />
+                    </View>
+                  </View>
+                  {arabicText ? <Text style={styles.arabicBlock}>{arabicText}</Text> : null}
+                  {translationText ? (
+                    <Text style={[styles.translationBlock, arabicText ? undefined : styles.translationPrimary]}>
+                      {translationText}
+                    </Text>
+                  ) : null}
                 </View>
-                <View style={styles.readingActions}>
-                  <Ionicons name="share-social-outline" size={18} color={palette.textMuted} />
-                  <Ionicons name="bookmark-outline" size={18} color={palette.textMuted} />
-                </View>
-              </View>
-              <Text style={styles.arabicBlock}>
-                {String(item.arab ?? item.contents ?? "")}
-              </Text>
-              <Text style={styles.translationBlock}>
-                {String(item.terjemah ?? item.translation ?? item.contents ?? "")}
-              </Text>
-            </View>
+              );
+            })()
           ))}
         </>
       ) : null}
@@ -197,6 +346,57 @@ export function LibraryScreen() {
                 ]}
               />
             </View>
+          </View>
+
+          <View style={styles.surfaceCard}>
+            <Text style={styles.cardTitle}>Azkar reader</Text>
+            <View style={styles.modeGroup}>
+              {readerModeOptions.map((item) => (
+                <Pressable
+                  key={item.value}
+                  onPress={() => setAzkarMode(item.value)}
+                  style={[styles.modeChip, azkarMode === item.value ? styles.modeChipActive : undefined]}
+                >
+                  <Text
+                    style={[
+                      styles.modeChipText,
+                      azkarMode === item.value ? styles.modeChipTextActive : undefined,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.azkarControlRow}>
+              <TouchableOpacity
+                style={styles.secondaryActionButton}
+                onPress={() => moveAzkarSelection(-1)}
+              >
+                <Ionicons name="play-skip-back" size={18} color={palette.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.primaryPlayButton} onPress={toggleAzkarPlayback}>
+                <Ionicons
+                  name={isAzkarPlaying ? "stop" : "play"}
+                  size={18}
+                  color={palette.onPrimary}
+                />
+                <Text style={styles.primaryPlayButtonText}>
+                  {isAzkarPlaying ? "Stop" : "Play current"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryActionButton}
+                onPress={() => moveAzkarSelection(1)}
+              >
+                <Ionicons name="play-skip-forward" size={18} color={palette.primary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.azkarControlMeta}>
+              {currentAzkarEntry
+                ? `${getAzkarTitle(currentAzkarEntry, currentAzkarIndex)} • Entry ${currentAzkarIndex + 1} of ${azkarEntries.length}`
+                : "Load a remembrance category to begin."}
+            </Text>
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
@@ -221,23 +421,43 @@ export function LibraryScreen() {
             })}
           </ScrollView>
 
-          {azkarEntries.map((item, index) => {
+          {(azkarMode === "listen" && currentAzkarEntry ? [currentAzkarEntry] : azkarEntries).map((item, rawIndex) => {
+            const index = azkarMode === "listen" ? currentAzkarIndex : rawIndex;
             const requiredCount = Number(item.count ?? item.repeat ?? 1) || 1;
             const count = tasbihCounts[index] ?? 0;
+            const active = index === currentAzkarIndex && azkarMode !== "read";
             return (
-              <View key={`azkar-${index}`} style={styles.adhkarCard}>
+              <Pressable
+                key={`azkar-${index}`}
+                onPress={() => {
+                  setCurrentAzkarIndex(index);
+                  if (azkarMode !== "read") {
+                    playAzkarEntry(index);
+                  }
+                }}
+                style={[styles.adhkarCard, active ? styles.adhkarCardActive : undefined]}
+              >
                 <View style={styles.adhkarHeader}>
                   <View>
-                    <Text style={styles.adhkarEntryTitle}>
-                      {String(item.category ?? `Remembrance ${index + 1}`)}
+                    <Text style={styles.adhkarEntryTitle}>{getAzkarTitle(item, index)}</Text>
+                    <Text style={styles.adhkarEntryHint}>
+                      {requiredCount} time(s) • Entry {index + 1}
                     </Text>
-                    <Text style={styles.adhkarEntryHint}>{requiredCount} time(s)</Text>
                   </View>
-                  <View style={styles.countPill}>
-                    <Text style={styles.countPillText}>{requiredCount}</Text>
+                  <View style={styles.adhkarHeaderActions}>
+                    <View style={styles.countPill}>
+                      <Text style={styles.countPillText}>{requiredCount}</Text>
+                    </View>
+                    <Ionicons
+                      name={active && isAzkarPlaying ? "volume-high" : "play-circle-outline"}
+                      size={20}
+                      color={active ? palette.secondary : palette.textMuted}
+                    />
                   </View>
                 </View>
-                <Text style={styles.adhkarArabic}>{String(item.zekr ?? item.content ?? "")}</Text>
+                <Text style={[styles.adhkarArabic, active ? styles.adhkarArabicActive : undefined]}>
+                  {getAzkarText(item)}
+                </Text>
                 {item.reference ? <Text style={styles.referenceText}>{String(item.reference)}</Text> : null}
                 <TouchableOpacity
                   style={[
@@ -261,7 +481,7 @@ export function LibraryScreen() {
                   </Text>
                   <Text style={styles.tasbihLabel}>Tap</Text>
                 </TouchableOpacity>
-              </View>
+              </Pressable>
             );
           })}
         </>
@@ -374,6 +594,28 @@ const styles = StyleSheet.create({
   segmentChipTextActive: {
     color: palette.primary,
   },
+  modeGroup: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+  },
+  modeChip: {
+    borderRadius: radii.pill,
+    backgroundColor: palette.surfaceLowest,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+  },
+  modeChipActive: {
+    backgroundColor: palette.primary,
+  },
+  modeChipText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: palette.textMuted,
+  },
+  modeChipTextActive: {
+    color: palette.onPrimary,
+  },
   hadithHero: {
     borderRadius: radii.lg,
     backgroundColor: palette.primary,
@@ -482,6 +724,12 @@ const styles = StyleSheet.create({
     fontSize: 21,
     color: palette.primary,
   },
+  readingMeta: {
+    marginTop: spacing.xs,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: palette.outline,
+  },
   readingActions: {
     flexDirection: "row",
     gap: spacing.sm,
@@ -499,6 +747,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 26,
     color: palette.textMuted,
+  },
+  translationPrimary: {
+    marginTop: 0,
+    fontSize: 17,
+    lineHeight: 28,
+    color: palette.text,
   },
   adhkarHero: {
     borderRadius: radii.lg,
@@ -555,16 +809,62 @@ const styles = StyleSheet.create({
   categoryChipTextActive: {
     color: palette.primary,
   },
+  azkarControlRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  primaryPlayButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    borderRadius: radii.md,
+    backgroundColor: palette.primary,
+    paddingVertical: 14,
+  },
+  primaryPlayButtonText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    color: palette.onPrimary,
+  },
+  secondaryActionButton: {
+    width: 52,
+    height: 52,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surfaceLowest,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  azkarControlMeta: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    lineHeight: 20,
+    color: palette.textMuted,
+  },
   adhkarCard: {
     borderRadius: radii.lg,
     backgroundColor: palette.surfaceLow,
     padding: spacing.xl,
     gap: spacing.md,
   },
+  adhkarCardActive: {
+    borderWidth: 1,
+    borderColor: "rgba(15, 73, 56, 0.16)",
+    backgroundColor: palette.surfaceHighest,
+  },
   adhkarHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  adhkarHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   adhkarEntryTitle: {
     fontFamily: fonts.serifBold,
@@ -596,6 +896,9 @@ const styles = StyleSheet.create({
     lineHeight: 48,
     textAlign: "right",
     color: palette.primary,
+  },
+  adhkarArabicActive: {
+    color: palette.primaryContainer,
   },
   referenceText: {
     fontFamily: fonts.bodyMedium,

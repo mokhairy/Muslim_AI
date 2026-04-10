@@ -42,7 +42,8 @@ export function QuranScreen() {
   const [currentAyahIndex, setCurrentAyahIndex] = useState(0);
   const [surahSearch, setSurahSearch] = useState("");
   const flatListRef = useRef<FlatList<AyahRow>>(null);
-  const handledCompletionRef = useRef<number | null>(null);
+  const previousDidJustFinishRef = useRef(false);
+  const playbackAyahIndexRef = useRef<number | null>(null);
   const player = useAudioPlayer(null, {
     updateInterval: 250,
     downloadFirst: true,
@@ -100,7 +101,7 @@ export function QuranScreen() {
       return;
     }
 
-    handledCompletionRef.current = null;
+    playbackAyahIndexRef.current = index;
     setCurrentAyahIndex(index);
     player.replace(source);
     player.seekTo(0);
@@ -113,8 +114,14 @@ export function QuranScreen() {
       return;
     }
 
-    if (playerStatus?.didJustFinish) {
-      player.seekTo(0);
+    if (
+      playbackAyahIndexRef.current === currentAyahIndex &&
+      typeof playerStatus?.currentTime === "number" &&
+      playerStatus.currentTime > 0 &&
+      !playerStatus?.didJustFinish
+    ) {
+      player.play();
+      return;
     }
 
     playAyah(currentAyahIndex);
@@ -134,7 +141,14 @@ export function QuranScreen() {
   }, [surahNumber, translation, reader]);
 
   useEffect(() => {
+    previousDidJustFinishRef.current = false;
+    playbackAyahIndexRef.current = null;
+    player.pause();
+  }, [ayahs, player]);
+
+  useEffect(() => {
     if (mode === "read") {
+      previousDidJustFinishRef.current = false;
       player.pause();
     }
   }, [mode, player]);
@@ -150,17 +164,25 @@ export function QuranScreen() {
   }, [currentAyahIndex, mode, ayahs]);
 
   useEffect(() => {
-    if (!playerStatus?.didJustFinish || handledCompletionRef.current === currentAyahIndex) {
+    const didJustFinish = Boolean(playerStatus?.didJustFinish);
+    if (!didJustFinish) {
+      previousDidJustFinishRef.current = false;
       return;
     }
 
-    handledCompletionRef.current = currentAyahIndex;
-    const nextIndex = currentAyahIndex + 1;
+    if (previousDidJustFinishRef.current) {
+      return;
+    }
+
+    previousDidJustFinishRef.current = true;
+    const finishedIndex = playbackAyahIndexRef.current ?? currentAyahIndex;
+    const nextIndex = finishedIndex + 1;
     if (ayahs[nextIndex] && mode !== "read") {
       playAyah(nextIndex);
       return;
     }
 
+    playbackAyahIndexRef.current = null;
     player.pause();
   }, [ayahs, currentAyahIndex, mode, player, playerStatus?.didJustFinish]);
 
