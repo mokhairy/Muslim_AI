@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Muslim AI",
+    "slug": "muslim-ai-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ca.geointel.muslimai",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Muslim AI uses your location to calculate prayer times and qibla direction."
+      }
+    },
+    "android": {
+      "package": "ca.geointel.muslimai",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-location",
+      "expo-font",
+      "expo-audio"
+    ]
+  }
+}
