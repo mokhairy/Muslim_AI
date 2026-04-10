@@ -18,6 +18,7 @@ import { ActivityIndicator, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AppLocationProvider } from "./src/context/AppLocationContext";
+import { PrayerAutomationProvider } from "./src/context/PrayerAutomationContext";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { LibraryScreen } from "./src/screens/LibraryScreen";
 import { MoreScreen } from "./src/screens/MoreScreen";
@@ -105,56 +106,58 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AppLocationProvider>
-        <NavigationContainer theme={navigationTheme}>
-          <StatusBar style="dark" />
-          <Tab.Navigator
-            screenOptions={({ route }) => ({
-              headerShown: false,
-              sceneStyle: {
-                backgroundColor: palette.background,
-              },
-              tabBarLabelStyle: {
-                fontFamily: fonts.bodySemiBold,
-                fontSize: 11,
-                letterSpacing: 0.3,
-              },
-              tabBarStyle: {
-                position: "absolute",
-                left: 18,
-                right: 18,
-                bottom: 18,
-                height: 76,
-                paddingTop: 10,
-                paddingBottom: 10,
-                borderTopWidth: 0,
-                borderRadius: radii.lg,
-                backgroundColor: palette.glass,
-                ...shadows.ambient,
-              },
-              tabBarItemStyle: {
-                borderRadius: radii.md,
-                marginHorizontal: 2,
-              },
-              tabBarActiveTintColor: palette.primary,
-              tabBarInactiveTintColor: "rgba(27, 28, 26, 0.48)",
-              tabBarIcon: ({ color, size, focused }) => (
-                <Ionicons
-                  name={focused ? iconByRoute[route.name as keyof RootTabParamList].replace("-outline", "") as keyof typeof Ionicons.glyphMap : iconByRoute[route.name as keyof RootTabParamList]}
-                  size={size}
-                  color={color}
-                />
-              ),
-            })}
-          >
-            <Tab.Screen name="Home">
-              {({ navigation }) => <HomeScreen navigateTo={(tab) => navigation.navigate(tab)} />}
-            </Tab.Screen>
-            <Tab.Screen name="Prayer" component={PrayerScreen} />
-            <Tab.Screen name="Quran" component={QuranScreen} />
-            <Tab.Screen name="Library" component={LibraryScreen} />
-            <Tab.Screen name="More" component={MoreScreen} />
-          </Tab.Navigator>
-        </NavigationContainer>
+        <PrayerAutomationProvider>
+          <NavigationContainer theme={navigationTheme}>
+            <StatusBar style="dark" />
+            <Tab.Navigator
+              screenOptions={({ route }) => ({
+                headerShown: false,
+                sceneStyle: {
+                  backgroundColor: palette.background,
+                },
+                tabBarLabelStyle: {
+                  fontFamily: fonts.bodySemiBold,
+                  fontSize: 11,
+                  letterSpacing: 0.3,
+                },
+                tabBarStyle: {
+                  position: "absolute",
+                  left: 18,
+                  right: 18,
+                  bottom: 18,
+                  height: 76,
+                  paddingTop: 10,
+                  paddingBottom: 10,
+                  borderTopWidth: 0,
+                  borderRadius: radii.lg,
+                  backgroundColor: palette.glass,
+                  ...shadows.ambient,
+                },
+                tabBarItemStyle: {
+                  borderRadius: radii.md,
+                  marginHorizontal: 2,
+                },
+                tabBarActiveTintColor: palette.primary,
+                tabBarInactiveTintColor: "rgba(27, 28, 26, 0.48)",
+                tabBarIcon: ({ color, size, focused }) => (
+                  <Ionicons
+                    name={focused ? iconByRoute[route.name as keyof RootTabParamList].replace("-outline", "") as keyof typeof Ionicons.glyphMap : iconByRoute[route.name as keyof RootTabParamList]}
+                    size={size}
+                    color={color}
+                  />
+                ),
+              })}
+            >
+              <Tab.Screen name="Home">
+                {({ navigation }) => <HomeScreen navigateTo={(tab) => navigation.navigate(tab)} />}
+              </Tab.Screen>
+              <Tab.Screen name="Prayer" component={PrayerScreen} />
+              <Tab.Screen name="Quran" component={QuranScreen} />
+              <Tab.Screen name="Library" component={LibraryScreen} />
+              <Tab.Screen name="More" component={MoreScreen} />
+            </Tab.Navigator>
+          </NavigationContainer>
+        </PrayerAutomationProvider>
       </AppLocationProvider>
     </SafeAreaProvider>
   );

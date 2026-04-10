@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Switch,
   StyleSheet,
   Text,
   TextInput,
@@ -13,6 +14,7 @@ import {
 } from "react-native";
 
 import { useAppLocation } from "../context/AppLocationContext";
+import { usePrayerAutomation } from "../context/PrayerAutomationContext";
 import { fetchPrayerTimes, fetchQibla, type PrayerTimesResponse, type QiblaResponse } from "../lib/api";
 import { fonts, palette, radii, shadows, spacing } from "../theme";
 
@@ -47,6 +49,20 @@ export function PrayerScreen() {
     refreshFromDevice,
     setManualCoordinates,
   } = useAppLocation();
+  const {
+    enabled: automationEnabled,
+    selectedPrayers,
+    permissionState,
+    isSyncing: isAutomationSyncing,
+    syncError: automationError,
+    lastSyncedLabel,
+    nextReminderLabel,
+    statusMessage,
+    enableAutomation,
+    disableAutomation,
+    togglePrayerSelection,
+    resyncSchedule,
+  } = usePrayerAutomation();
   const [latitude, setLatitude] = useState(sharedLatitude.toFixed(6));
   const [longitude, setLongitude] = useState(sharedLongitude.toFixed(6));
   const [prayerDate, setPrayerDate] = useState(todayIsoDate());
@@ -109,6 +125,21 @@ export function PrayerScreen() {
 
   const nextPrayer = useMemo(() => nextPrayerLabel(prayerData), [prayerData]);
   const qiblaRotation = qiblaData ? `${qiblaData.direction}deg` : "0deg";
+
+  async function handleAutomationSwitch(nextValue: boolean) {
+    if (nextValue) {
+      const enabledSuccessfully = await enableAutomation();
+      if (!enabledSuccessfully) {
+        Alert.alert(
+          "Permission needed",
+          "Prayer reminders need notification permission before the adhan schedule can be activated.",
+        );
+      }
+      return;
+    }
+
+    await disableAutomation();
+  }
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -213,6 +244,86 @@ export function PrayerScreen() {
         </View>
         {loading ? <ActivityIndicator color={palette.primary} style={styles.loader} /> : null}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      </View>
+
+      <View style={styles.automationCard}>
+        <View style={styles.automationHeader}>
+          <View style={styles.automationHeaderCopy}>
+            <Text style={styles.formTitle}>Prayer reminders</Text>
+            <Text style={styles.automationSubtitle}>Local alerts and adhan on this device only</Text>
+          </View>
+          <Switch
+            value={automationEnabled}
+            onValueChange={handleAutomationSwitch}
+            thumbColor={automationEnabled ? palette.secondaryFixed : palette.surfaceLowest}
+            trackColor={{
+              false: palette.outlineVariant,
+              true: palette.primary,
+            }}
+          />
+        </View>
+
+        <Text style={styles.automationBody}>{statusMessage}</Text>
+
+        <View style={styles.automationMetaGrid}>
+          <View style={styles.automationMetaCard}>
+            <Text style={styles.automationMetaLabel}>Permission</Text>
+            <Text style={styles.automationMetaValue}>
+              {permissionState === "granted"
+                ? "Granted"
+                : permissionState === "denied"
+                  ? "Denied"
+                  : "Pending"}
+            </Text>
+          </View>
+          <View style={styles.automationMetaCard}>
+            <Text style={styles.automationMetaLabel}>Next reminder</Text>
+            <Text style={styles.automationMetaValue}>{nextReminderLabel}</Text>
+          </View>
+        </View>
+
+        <View style={styles.chipGroup}>
+          {["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"].map((prayerName) => {
+            const isSelected = selectedPrayers.includes(
+              prayerName as "Fajr" | "Dhuhr" | "Asr" | "Maghrib" | "Isha",
+            );
+            return (
+              <TouchableOpacity
+                key={prayerName}
+                style={[styles.prayerChip, isSelected ? styles.prayerChipActive : undefined]}
+                onPress={() =>
+                  togglePrayerSelection(
+                    prayerName as "Fajr" | "Dhuhr" | "Asr" | "Maghrib" | "Isha",
+                  )
+                }
+              >
+                <Text
+                  style={[
+                    styles.prayerChipText,
+                    isSelected ? styles.prayerChipTextActive : undefined,
+                  ]}
+                >
+                  {prayerName}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => resyncSchedule().catch(() => null)}
+        >
+          <Text style={styles.secondaryButtonText}>
+            {isAutomationSyncing ? "Syncing..." : "Resync reminders"}
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={styles.automationFootnote}>Last synced: {lastSyncedLabel}</Text>
+        <Text style={styles.automationFootnote}>
+          If the app is open at prayer time, the adhan plays on the mobile device speakers. In the background, the device delivers the local reminder notification.
+        </Text>
+        {automationError ? <Text style={styles.errorText}>{automationError}</Text> : null}
       </View>
 
       <View style={styles.scheduleHeader}>
@@ -458,6 +569,83 @@ const styles = StyleSheet.create({
     backgroundColor: palette.surfaceLow,
     padding: spacing.lg,
     gap: spacing.sm,
+  },
+  automationCard: {
+    borderRadius: radii.lg,
+    backgroundColor: palette.surfaceLow,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  automationHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  automationHeaderCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  automationSubtitle: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: palette.textMuted,
+  },
+  automationBody: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    lineHeight: 22,
+    color: palette.textMuted,
+  },
+  automationMetaGrid: {
+    gap: spacing.sm,
+  },
+  automationMetaCard: {
+    gap: spacing.xs,
+    borderRadius: radii.sm,
+    backgroundColor: palette.surfaceLowest,
+    padding: spacing.md,
+  },
+  automationMetaLabel: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    color: palette.textMuted,
+  },
+  automationMetaValue: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 14,
+    color: palette.primary,
+  },
+  chipGroup: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+  },
+  prayerChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderRadius: radii.pill,
+    backgroundColor: palette.surfaceHighest,
+  },
+  prayerChipActive: {
+    backgroundColor: palette.primary,
+  },
+  prayerChipText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    letterSpacing: 0.6,
+    color: palette.primary,
+  },
+  prayerChipTextActive: {
+    color: palette.onPrimary,
+  },
+  automationFootnote: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    lineHeight: 20,
+    color: palette.textMuted,
   },
   formTitle: {
     fontFamily: fonts.serifBold,

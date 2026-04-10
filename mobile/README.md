@@ -134,8 +134,13 @@ If Android does not attach on first boot, wait for the emulator to finish cold b
 ## Current status
 
 - `npm run typecheck` passes
+- `npx expo-doctor` passes
 - iOS launch was verified in Expo Go
 - Audio was migrated to `expo-audio` for Expo SDK 55 compatibility
+- Prayer reminders now support:
+  - local notification scheduling for selected prayers
+  - persisted prayer reminder settings
+  - local-device adhan playback while the app is open
 - Android host tooling is installed and the AVD exists, but first-boot validation still needs one clean `adb`/Expo attach cycle
 
 ## Next passes that still need work
@@ -146,3 +151,10 @@ If Android does not attach on first boot, wait for the emulator to finish cold b
 - Add offline caching for surahs, azkar, and hadith
 - Split the shared API layer into domain-specific hooks
 - Add device-specific polish for Android back behavior and iOS audio session handling
+- Phase 2: add mobile smart-speaker discovery and casting for adhan playback
+- Phase 2 details:
+  - discover user-approved speakers on the local network instead of broadcasting blindly
+  - support selected target devices or saved speaker groups
+  - evaluate Cast and DLNA support with native modules and a development build
+  - document platform and store-policy constraints before implementation
+  - tracked in GitHub issue `#7`
