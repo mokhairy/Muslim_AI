@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -13,11 +12,9 @@ import {
   View,
 } from "react-native";
 
+import { useAppLocation } from "../context/AppLocationContext";
 import { fetchPrayerTimes, fetchQibla, type PrayerTimesResponse, type QiblaResponse } from "../lib/api";
 import { fonts, palette, radii, shadows, spacing } from "../theme";
-
-const DEFAULT_LATITUDE = "23.5880";
-const DEFAULT_LONGITUDE = "58.3829";
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
@@ -42,8 +39,16 @@ function nextPrayerLabel(prayerData: PrayerTimesResponse | null) {
 }
 
 export function PrayerScreen() {
-  const [latitude, setLatitude] = useState(DEFAULT_LATITUDE);
-  const [longitude, setLongitude] = useState(DEFAULT_LONGITUDE);
+  const {
+    latitude: sharedLatitude,
+    longitude: sharedLongitude,
+    label,
+    isResolving,
+    refreshFromDevice,
+    setManualCoordinates,
+  } = useAppLocation();
+  const [latitude, setLatitude] = useState(sharedLatitude.toFixed(6));
+  const [longitude, setLongitude] = useState(sharedLongitude.toFixed(6));
   const [prayerDate, setPrayerDate] = useState(todayIsoDate());
   const [prayerData, setPrayerData] = useState<PrayerTimesResponse | null>(null);
   const [qiblaData, setQiblaData] = useState<QiblaResponse | null>(null);
@@ -75,22 +80,32 @@ export function PrayerScreen() {
   }
 
   async function useCurrentLocation() {
-    const permission = await Location.requestForegroundPermissionsAsync();
-    if (!permission.granted) {
+    const refreshed = await refreshFromDevice();
+    if (!refreshed) {
       Alert.alert("Location permission denied", "Enable location access to use current prayer times.");
       return;
     }
-    const position = await Location.getCurrentPositionAsync({});
-    const nextLatitude = position.coords.latitude.toFixed(6);
-    const nextLongitude = position.coords.longitude.toFixed(6);
-    setLatitude(nextLatitude);
-    setLongitude(nextLongitude);
-    loadPrayerDashboard(nextLatitude, nextLongitude);
   }
 
   useEffect(() => {
-    loadPrayerDashboard().catch(() => null);
-  }, []);
+    const nextLatitude = sharedLatitude.toFixed(6);
+    const nextLongitude = sharedLongitude.toFixed(6);
+    setLatitude(nextLatitude);
+    setLongitude(nextLongitude);
+    loadPrayerDashboard(nextLatitude, nextLongitude).catch(() => null);
+  }, [sharedLatitude, sharedLongitude]);
+
+  async function refreshScheduleWithDraftCoordinates() {
+    const parsedLatitude = Number(latitude);
+    const parsedLongitude = Number(longitude);
+    if (Number.isNaN(parsedLatitude) || Number.isNaN(parsedLongitude)) {
+      setError("Latitude and longitude must be valid numbers.");
+      return;
+    }
+
+    await loadPrayerDashboard(latitude, longitude);
+    await setManualCoordinates(parsedLatitude, parsedLongitude);
+  }
 
   const nextPrayer = useMemo(() => nextPrayerLabel(prayerData), [prayerData]);
   const qiblaRotation = qiblaData ? `${qiblaData.direction}deg` : "0deg";
@@ -110,7 +125,7 @@ export function PrayerScreen() {
       <View style={styles.heroHeader}>
         <View style={styles.locationChip}>
           <Ionicons name="location-outline" size={14} color={palette.primary} />
-          <Text style={styles.locationText}>{latitude}, {longitude}</Text>
+          <Text style={styles.locationText}>{label}</Text>
         </View>
         <Text style={styles.heroTitle}>Finding the sacred.</Text>
         <Text style={styles.heroSubtitle}>
@@ -187,11 +202,13 @@ export function PrayerScreen() {
           keyboardType="decimal-pad"
         />
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => loadPrayerDashboard()}>
+          <TouchableOpacity style={styles.primaryButton} onPress={refreshScheduleWithDraftCoordinates}>
             <Text style={styles.primaryButtonText}>Refresh schedule</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryButton} onPress={useCurrentLocation}>
-            <Text style={styles.secondaryButtonText}>Use current location</Text>
+            <Text style={styles.secondaryButtonText}>
+              {isResolving ? "Locating..." : "Use current location"}
+            </Text>
           </TouchableOpacity>
         </View>
         {loading ? <ActivityIndicator color={palette.primary} style={styles.loader} /> : null}

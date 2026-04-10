@@ -10,15 +10,13 @@ import {
   View,
 } from "react-native";
 
+import { useAppLocation } from "../context/AppLocationContext";
 import { fetchPrayerTimes, type PrayerTimesResponse } from "../lib/api";
 import { fonts, palette, radii, shadows, spacing } from "../theme";
 
 type Props = {
   navigateTo: (tab: "Prayer" | "Quran" | "Library" | "More") => void;
 };
-
-const DEFAULT_LATITUDE = 23.588;
-const DEFAULT_LONGITUDE = 58.3829;
 
 const quickActions: Array<{
   title: string;
@@ -71,14 +69,16 @@ function getNextPrayer(prayerData: PrayerTimesResponse | null) {
 }
 
 export function HomeScreen({ navigateTo }: Props) {
+  const { latitude, longitude, label } = useAppLocation();
   const [prayerData, setPrayerData] = useState<PrayerTimesResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchPrayerTimes(todayIsoDate(), DEFAULT_LATITUDE, DEFAULT_LONGITUDE)
+    setLoading(true);
+    fetchPrayerTimes(todayIsoDate(), latitude, longitude)
       .then(setPrayerData)
       .finally(() => setLoading(false));
-  }, []);
+  }, [latitude, longitude]);
 
   const nextPrayer = useMemo(() => getNextPrayer(prayerData), [prayerData]);
   const formattedDate = useMemo(
@@ -101,7 +101,7 @@ export function HomeScreen({ navigateTo }: Props) {
         </View>
         <View style={styles.locationChip}>
           <Ionicons name="location-outline" size={14} color={palette.primary} />
-          <Text style={styles.locationText}>Muscat, Oman</Text>
+          <Text style={styles.locationText}>{label}</Text>
         </View>
       </View>
 
