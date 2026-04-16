@@ -9,12 +9,12 @@ from Muslim_AI.content_api_clients import AyahRow, QuranAudioPageData, QuranTran
 def _editions_side_effect(*, edition_format: str, edition_type: str | None = None):
     if edition_format == "text":
         return [
-            {"identifier": "en.asad", "language": "en", "englishName": "Muhammad Asad"},
+            {"identifier": "85", "language": "en", "englishName": "Abdel Haleem"},
         ]
     if edition_format == "audio":
         return [
             {
-                "identifier": "ar.alafasy",
+                "identifier": "7",
                 "englishName": "Alafasy",
                 "type": "versebyverse",
             },
@@ -36,14 +36,14 @@ class QuranTextViewTests(TestCase):
     ):
         fetch_editions_mock.side_effect = _editions_side_effect
         fetch_json_mock.return_value = {
-            "data": [
+            "chapters": [
                 {
-                    "number": 1,
-                    "name": "سُورَةُ ٱلْفَاتِحَةِ",
-                    "englishName": "Al-Faatiha",
-                    "englishNameTranslation": "The Opening",
-                    "numberOfAyahs": 7,
-                    "revelationType": "Meccan",
+                    "id": 1,
+                    "name_arabic": "سُورَةُ ٱلْفَاتِحَةِ",
+                    "name_simple": "Al-Faatiha",
+                    "translated_name": {"name": "The Opening"},
+                    "verses_count": 7,
+                    "revelation_place": "Meccan",
                 }
             ]
         }
@@ -87,8 +87,8 @@ class QuranTextViewTests(TestCase):
             reverse("Quran_Text:home"),
             {
                 "surah": 1,
-                "translation": "en.asad",
-                "reader": "ar.alafasy",
+                "translation": "85",
+                "reader": "7",
                 "mode": "read_listen",
             },
         )
@@ -115,14 +115,14 @@ class QuranTextViewTests(TestCase):
     ):
         fetch_editions_mock.side_effect = _editions_side_effect
         fetch_json_mock.return_value = {
-            "data": [
+            "chapters": [
                 {
-                    "number": 2,
-                    "name": "سُورَةُ ٱلْبَقَرَةِ",
-                    "englishName": "Al-Baqara",
-                    "englishNameTranslation": "The Cow",
-                    "numberOfAyahs": 286,
-                    "revelationType": "Medinan",
+                    "id": 2,
+                    "name_arabic": "سُورَةُ ٱلْبَقَرَةِ",
+                    "name_simple": "Al-Baqara",
+                    "translated_name": {"name": "The Cow"},
+                    "verses_count": 286,
+                    "revelation_place": "Medinan",
                 }
             ]
         }
@@ -155,8 +155,8 @@ class QuranTextViewTests(TestCase):
             reverse("Quran_Text:home"),
             {
                 "surah": 2,
-                "translation": "en.asad",
-                "reader": "ar.alafasy",
+                "translation": "85",
+                "reader": "7",
             },
         )
 

@@ -22,26 +22,38 @@ class ContentApiClientTests(SimpleTestCase):
 
     @patch("Muslim_AI.content_api_clients.fetch_json")
     def test_quran_translation_page_shapes_rows_and_uses_cache(self, fetch_json_mock):
-        fetch_json_mock.return_value = {
-            "data": [
-                {
-                    "ayahs": [
-                        {"numberInSurah": 1, "text": "بِسْمِ اللَّهِ"},
-                    ]
-                },
-                {
-                    "englishName": "Al-Fatihah",
-                    "ayahs": [
-                        {"numberInSurah": 1, "text": "In the name of Allah"},
+        def side_effect(url):
+            if url.endswith("/chapters/1?language=en"):
+                return {
+                    "chapter": {
+                        "id": 1,
+                        "name_arabic": "الفاتحة",
+                        "name_simple": "Al-Fatihah",
+                        "translated_name": {"name": "The Opening"},
+                        "verses_count": 7,
+                        "revelation_place": "makkah",
+                    }
+                }
+            if url.endswith("/quran/verses/uthmani?chapter_number=1"):
+                return {"verses": [{"verse_key": "1:1", "text_uthmani": "بِسْمِ اللَّهِ"}]}
+            if "verses/by_chapter/1" in url:
+                return {
+                    "verses": [
+                        {
+                            "verse_key": "1:1",
+                            "translations": [{"text": "In the name of Allah"}],
+                        }
                     ],
-                },
-            ]
-        }
+                    "pagination": {"next_page": None},
+                }
+            raise AssertionError(f"Unexpected URL {url}")
 
-        first = load_quran_translation_page(surah_number=1, selected_edition="en.asad")
-        second = load_quran_translation_page(surah_number=1, selected_edition="en.asad")
+        fetch_json_mock.side_effect = side_effect
 
-        self.assertEqual(fetch_json_mock.call_count, 1)
+        first = load_quran_translation_page(surah_number=1, selected_edition="85")
+        second = load_quran_translation_page(surah_number=1, selected_edition="85")
+
+        self.assertEqual(fetch_json_mock.call_count, 3)
         self.assertEqual(first.surah_data["englishName"], "Al-Fatihah")
         self.assertEqual(
             first.ayah_rows,

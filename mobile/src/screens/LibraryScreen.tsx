@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   fetchAzkarCategory,
@@ -27,13 +28,13 @@ const sections = [
   { value: "hisn", label: "Hisn Muslim" },
 ] as const;
 
-const readerModeOptions = [
+const AZKAR_AUDIO_STATUS =
+  "Listen modes use the device's Arabic voice. Install a high-quality Arabic system voice on the phone for better playback.";
+const azkarModeOptions = [
   { value: "read", label: "Read only" },
   { value: "listen", label: "Listen only" },
   { value: "read_listen", label: "Read while listening" },
 ] as const;
-
-type ReaderMode = (typeof readerModeOptions)[number]["value"];
 
 function getAzkarText(entry: Record<string, unknown>): string {
   return String(entry.zekr ?? entry.content ?? "").trim();
@@ -41,6 +42,14 @@ function getAzkarText(entry: Record<string, unknown>): string {
 
 function getAzkarTitle(entry: Record<string, unknown>, index: number): string {
   return String(entry.category ?? `Remembrance ${index + 1}`);
+}
+
+function getAzkarRepeatCount(entry: Record<string, unknown>): number {
+  return Number(entry.count ?? entry.repeat ?? 1) || 1;
+}
+
+function isMostlyArabic(value: string): boolean {
+  return /[\u0600-\u06FF]/.test(value);
 }
 
 function getHadithReference(item: Record<string, unknown>): string {
@@ -58,6 +67,7 @@ function getHadithReference(item: Record<string, unknown>): string {
 }
 
 export function LibraryScreen() {
+  const insets = useSafeAreaInsets();
   const [section, setSection] = useState<(typeof sections)[number]["value"]>("hadith");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -69,10 +79,11 @@ export function LibraryScreen() {
   const [azkarCategories, setAzkarCategories] = useState<string[]>([]);
   const [azkarEntries, setAzkarEntries] = useState<any[]>([]);
   const [tasbihCounts, setTasbihCounts] = useState<Record<number, number>>({});
-  const [azkarMode, setAzkarMode] = useState<ReaderMode>("read_listen");
   const [currentAzkarIndex, setCurrentAzkarIndex] = useState(0);
-  const [isAzkarPlaying, setIsAzkarPlaying] = useState(false);
-  const [azkarVoiceIdentifier, setAzkarVoiceIdentifier] = useState<string>();
+  const [azkarMode, setAzkarMode] = useState<(typeof azkarModeOptions)[number]["value"]>("read");
+  const [azkarIsPlaying, setAzkarIsPlaying] = useState(false);
+  const [azkarPaused, setAzkarPaused] = useState(false);
+  const [azkarPlayingIndex, setAzkarPlayingIndex] = useState<number | null>(null);
   const azkarPlaybackTokenRef = useRef(0);
 
   const [hisnCollectionId, setHisnCollectionId] = useState("27");
@@ -81,76 +92,96 @@ export function LibraryScreen() {
 
   const currentAzkarEntry = azkarEntries[currentAzkarIndex] ?? null;
 
-  function stopAzkarPlayback() {
+  async function stopAzkarPlayback(resetIndex = false) {
     azkarPlaybackTokenRef.current += 1;
-    setIsAzkarPlaying(false);
-    Speech.stop();
+    setAzkarIsPlaying(false);
+    setAzkarPaused(false);
+    if (resetIndex) {
+      setAzkarPlayingIndex(null);
+    }
+    await Speech.stop().catch(() => null);
   }
 
-  function playAzkarEntry(index: number) {
+  async function playAzkarEntry(index: number) {
     const entry = azkarEntries[index];
     const text = entry ? getAzkarText(entry) : "";
-    if (!text) {
+
+    if (!entry || !text) {
+      await stopAzkarPlayback(true);
       return;
     }
 
-    const nextToken = azkarPlaybackTokenRef.current + 1;
-    azkarPlaybackTokenRef.current = nextToken;
+    const token = azkarPlaybackTokenRef.current + 1;
+    azkarPlaybackTokenRef.current = token;
+    setError("");
     setCurrentAzkarIndex(index);
-    setIsAzkarPlaying(true);
-    Speech.stop();
+    setAzkarPlayingIndex(index);
+    setAzkarIsPlaying(true);
+    setAzkarPaused(false);
+    await Speech.stop().catch(() => null);
     Speech.speak(text, {
       language: "ar",
-      voice: azkarVoiceIdentifier,
-      rate: 0.9,
       pitch: 1,
+      rate: 0.92,
       onDone: () => {
-        if (azkarPlaybackTokenRef.current !== nextToken) {
+        if (azkarPlaybackTokenRef.current !== token) {
           return;
         }
+
         const nextIndex = index + 1;
         if (azkarMode !== "read" && azkarEntries[nextIndex]) {
-          playAzkarEntry(nextIndex);
+          setCurrentAzkarIndex(nextIndex);
           return;
         }
-        setIsAzkarPlaying(false);
+
+        setAzkarIsPlaying(false);
+        setAzkarPaused(false);
+        setAzkarPlayingIndex(null);
       },
       onStopped: () => {
-        if (azkarPlaybackTokenRef.current === nextToken) {
-          setIsAzkarPlaying(false);
+        if (azkarPlaybackTokenRef.current !== token) {
+          return;
         }
+        setAzkarIsPlaying(false);
       },
       onError: () => {
-        if (azkarPlaybackTokenRef.current === nextToken) {
-          setIsAzkarPlaying(false);
-          setError("Unable to play this remembrance on the current device voice.");
+        if (azkarPlaybackTokenRef.current !== token) {
+          return;
         }
+        setAzkarIsPlaying(false);
+        setAzkarPaused(false);
+        setAzkarPlayingIndex(null);
+        setError("Adhkar playback is unavailable on this device.");
       },
     });
   }
 
-  function toggleAzkarPlayback() {
-    if (isAzkarPlaying) {
-      stopAzkarPlayback();
+  async function toggleAzkarPlayback() {
+    if (!currentAzkarEntry) {
       return;
     }
-    playAzkarEntry(currentAzkarIndex);
+
+    if (azkarIsPlaying) {
+      await Speech.pause().catch(() => Speech.stop());
+      setAzkarIsPlaying(false);
+      setAzkarPaused(true);
+      return;
+    }
+
+    if (azkarPaused && azkarPlayingIndex === currentAzkarIndex) {
+      await Speech.resume().catch(() => playAzkarEntry(currentAzkarIndex));
+      setAzkarIsPlaying(true);
+      setAzkarPaused(false);
+      return;
+    }
+
+    await playAzkarEntry(currentAzkarIndex);
   }
 
-  function moveAzkarSelection(direction: -1 | 1) {
-    if (!azkarEntries.length) {
-      return;
-    }
-
-    const nextIndex = Math.min(
-      Math.max(currentAzkarIndex + direction, 0),
-      Math.max(azkarEntries.length - 1, 0),
-    );
+  function stepAzkar(direction: -1 | 1) {
+    const nextIndex = Math.min(Math.max(currentAzkarIndex + direction, 0), Math.max(azkarEntries.length - 1, 0));
+    setAzkarPaused(false);
     setCurrentAzkarIndex(nextIndex);
-
-    if (azkarMode === "listen" || isAzkarPlaying) {
-      playAzkarEntry(nextIndex);
-    }
   }
 
   async function loadActiveSection() {
@@ -188,29 +219,30 @@ export function LibraryScreen() {
   }, [azkarCategory]);
 
   useEffect(() => {
-    Speech.getAvailableVoicesAsync()
-      .then((voices) => {
-        const arabicVoice = voices.find((voice) => voice.language?.toLowerCase().startsWith("ar"));
-        setAzkarVoiceIdentifier(arabicVoice?.identifier);
-      })
-      .catch(() => null);
-  }, []);
-
-  useEffect(() => {
-    if (section !== "azkar" || azkarMode === "read") {
-      stopAzkarPlayback();
-    }
-  }, [azkarMode, section]);
-
-  useEffect(() => {
     setCurrentAzkarIndex(0);
-    stopAzkarPlayback();
   }, [azkarCategory, section]);
 
   useEffect(() => {
+    if (section !== "azkar" || azkarMode === "read") {
+      stopAzkarPlayback(section !== "azkar").catch(() => null);
+      return;
+    }
+
+    if (!azkarEntries[currentAzkarIndex]) {
+      stopAzkarPlayback(true).catch(() => null);
+      return;
+    }
+
+    if (azkarPaused && azkarPlayingIndex === currentAzkarIndex) {
+      return;
+    }
+
+    playAzkarEntry(currentAzkarIndex).catch(() => null);
+  }, [section, azkarMode, azkarEntries, currentAzkarIndex]);
+
+  useEffect(() => {
     return () => {
-      azkarPlaybackTokenRef.current += 1;
-      Speech.stop();
+      Speech.stop().catch(() => null);
     };
   }, []);
 
@@ -220,7 +252,14 @@ export function LibraryScreen() {
   );
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + spacing.md, paddingBottom: 126 + insets.bottom },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.topBar}>
         <Text style={styles.brand}>Muslim AI</Text>
         <View style={styles.profileDot} />
@@ -351,8 +390,8 @@ export function LibraryScreen() {
           <View style={styles.surfaceCard}>
             <Text style={styles.cardTitle}>Azkar reader</Text>
             <View style={styles.modeGroup}>
-              {readerModeOptions.map((item) => (
-                <Pressable
+              {azkarModeOptions.map((item) => (
+                <TouchableOpacity
                   key={item.value}
                   onPress={() => setAzkarMode(item.value)}
                   style={[styles.modeChip, azkarMode === item.value ? styles.modeChipActive : undefined]}
@@ -365,38 +404,55 @@ export function LibraryScreen() {
                   >
                     {item.label}
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               ))}
             </View>
-            <View style={styles.azkarControlRow}>
-              <TouchableOpacity
-                style={styles.secondaryActionButton}
-                onPress={() => moveAzkarSelection(-1)}
-              >
-                <Ionicons name="play-skip-back" size={18} color={palette.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryPlayButton} onPress={toggleAzkarPlayback}>
-                <Ionicons
-                  name={isAzkarPlaying ? "stop" : "play"}
-                  size={18}
-                  color={palette.onPrimary}
-                />
-                <Text style={styles.primaryPlayButtonText}>
-                  {isAzkarPlaying ? "Stop" : "Play current"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryActionButton}
-                onPress={() => moveAzkarSelection(1)}
-              >
-                <Ionicons name="play-skip-forward" size={18} color={palette.primary} />
-              </TouchableOpacity>
+            <View style={styles.azkarAudioNotice}>
+              <Ionicons name="information-circle-outline" size={18} color={palette.secondary} />
+              <Text style={styles.azkarAudioNoticeText}>{AZKAR_AUDIO_STATUS}</Text>
             </View>
             <Text style={styles.azkarControlMeta}>
-              {currentAzkarEntry
-                ? `${getAzkarTitle(currentAzkarEntry, currentAzkarIndex)} • Entry ${currentAzkarIndex + 1} of ${azkarEntries.length}`
-                : "Load a remembrance category to begin."}
+              {currentAzkarEntry ? `Entry ${currentAzkarIndex + 1} of ${azkarEntries.length}` : "Load a remembrance category to begin."}
             </Text>
+            {currentAzkarEntry ? (
+              <Text style={styles.azkarControlArabicMeta}>{getAzkarTitle(currentAzkarEntry, currentAzkarIndex)}</Text>
+            ) : null}
+            {azkarMode !== "read" && currentAzkarEntry ? (
+              <View style={styles.azkarControlRow}>
+                <TouchableOpacity
+                  style={styles.secondaryActionButton}
+                  onPress={() => stepAzkar(-1)}
+                  disabled={currentAzkarIndex === 0}
+                >
+                  <Ionicons
+                    name="play-skip-back"
+                    size={18}
+                    color={currentAzkarIndex === 0 ? palette.outline : palette.primary}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.primaryPlayButton} onPress={() => toggleAzkarPlayback()}>
+                  <Ionicons
+                    name={azkarIsPlaying ? "pause" : "play"}
+                    size={16}
+                    color={palette.onPrimary}
+                  />
+                  <Text style={styles.primaryPlayButtonText}>
+                    {azkarIsPlaying ? "Pause recitation" : azkarPaused ? "Resume recitation" : "Play recitation"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.secondaryActionButton}
+                  onPress={() => stepAzkar(1)}
+                  disabled={currentAzkarIndex >= azkarEntries.length - 1}
+                >
+                  <Ionicons
+                    name="play-skip-forward"
+                    size={18}
+                    color={currentAzkarIndex >= azkarEntries.length - 1 ? palette.outline : palette.primary}
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
@@ -421,69 +477,114 @@ export function LibraryScreen() {
             })}
           </ScrollView>
 
-          {(azkarMode === "listen" && currentAzkarEntry ? [currentAzkarEntry] : azkarEntries).map((item, rawIndex) => {
-            const index = azkarMode === "listen" ? currentAzkarIndex : rawIndex;
-            const requiredCount = Number(item.count ?? item.repeat ?? 1) || 1;
-            const count = tasbihCounts[index] ?? 0;
-            const active = index === currentAzkarIndex && azkarMode !== "read";
-            return (
-              <Pressable
-                key={`azkar-${index}`}
-                onPress={() => {
-                  setCurrentAzkarIndex(index);
-                  if (azkarMode !== "read") {
-                    playAzkarEntry(index);
-                  }
-                }}
-                style={[styles.adhkarCard, active ? styles.adhkarCardActive : undefined]}
-              >
+          {azkarMode === "listen" && currentAzkarEntry ? (
+            <View style={[styles.adhkarCard, styles.adhkarFocusCard]}>
                 <View style={styles.adhkarHeader}>
                   <View>
-                    <Text style={styles.adhkarEntryTitle}>{getAzkarTitle(item, index)}</Text>
-                    <Text style={styles.adhkarEntryHint}>
-                      {requiredCount} time(s) • Entry {index + 1}
-                    </Text>
-                  </View>
-                  <View style={styles.adhkarHeaderActions}>
-                    <View style={styles.countPill}>
-                      <Text style={styles.countPillText}>{requiredCount}</Text>
-                    </View>
-                    <Ionicons
-                      name={active && isAzkarPlaying ? "volume-high" : "play-circle-outline"}
-                      size={20}
-                      color={active ? palette.secondary : palette.textMuted}
-                    />
-                  </View>
-                </View>
-                <Text style={[styles.adhkarArabic, active ? styles.adhkarArabicActive : undefined]}>
-                  {getAzkarText(item)}
-                </Text>
-                {item.reference ? <Text style={styles.referenceText}>{String(item.reference)}</Text> : null}
-                <TouchableOpacity
-                  style={[
-                    styles.tasbihButton,
-                    count > 0 ? styles.tasbihButtonActive : undefined,
-                  ]}
-                  onPress={() =>
-                    setTasbihCounts((current) => ({
-                      ...current,
-                      [index]: Math.min(requiredCount, (current[index] ?? 0) + 1),
-                    }))
-                  }
-                >
                   <Text
                     style={[
-                      styles.tasbihCount,
-                      count > 0 ? styles.tasbihCountActive : undefined,
+                      styles.adhkarEntryTitle,
+                      isMostlyArabic(getAzkarTitle(currentAzkarEntry, currentAzkarIndex)) ? styles.rtlTitle : undefined,
                     ]}
                   >
-                    {count}
+                    {getAzkarTitle(currentAzkarEntry, currentAzkarIndex)}
                   </Text>
-                  <Text style={styles.tasbihLabel}>Tap</Text>
-                </TouchableOpacity>
-              </Pressable>
-            );
-          })}
+                  <Text style={styles.adhkarEntryHint}>
+                    {getAzkarRepeatCount(currentAzkarEntry)} time(s) • Entry {currentAzkarIndex + 1}
+                  </Text>
+                </View>
+                <View style={styles.adhkarHeaderActions}>
+                  <View style={styles.countPill}>
+                    <Text style={styles.countPillText}>{getAzkarRepeatCount(currentAzkarEntry)}</Text>
+                  </View>
+                  <Ionicons
+                    name={azkarIsPlaying ? "volume-high" : "volume-medium-outline"}
+                    size={20}
+                    color={azkarIsPlaying ? palette.secondary : palette.textMuted}
+                  />
+                </View>
+              </View>
+              <Text style={[styles.adhkarArabic, styles.adhkarArabicActive]}>
+                {getAzkarText(currentAzkarEntry)}
+              </Text>
+              {currentAzkarEntry.reference ? (
+                <Text style={styles.referenceText}>{String(currentAzkarEntry.reference)}</Text>
+              ) : null}
+              <Text style={styles.azkarControlMeta}>
+                Listen-only keeps the surface focused on the current remembrance while playback advances automatically.
+              </Text>
+            </View>
+          ) : null}
+
+          {azkarMode !== "listen"
+            ? azkarEntries.map((item, index) => {
+                const requiredCount = getAzkarRepeatCount(item);
+                const count = tasbihCounts[index] ?? 0;
+                const active = index === currentAzkarIndex;
+                return (
+                  <Pressable
+                    key={`azkar-${index}`}
+                    onPress={() => {
+                      setCurrentAzkarIndex(index);
+                      setAzkarPaused(false);
+                    }}
+                    style={[styles.adhkarCard, active ? styles.adhkarCardActive : undefined]}
+                  >
+                    <View style={styles.adhkarHeader}>
+                      <View>
+                        <Text
+                          style={[
+                            styles.adhkarEntryTitle,
+                            isMostlyArabic(getAzkarTitle(item, index)) ? styles.rtlTitle : undefined,
+                          ]}
+                        >
+                          {getAzkarTitle(item, index)}
+                        </Text>
+                        <Text style={styles.adhkarEntryHint}>
+                          {requiredCount} time(s) • Entry {index + 1}
+                        </Text>
+                      </View>
+                      <View style={styles.adhkarHeaderActions}>
+                        <View style={styles.countPill}>
+                          <Text style={styles.countPillText}>{requiredCount}</Text>
+                        </View>
+                        <Ionicons
+                          name={active && azkarMode !== "read" ? "volume-high" : active ? "checkmark-circle" : "ellipse-outline"}
+                          size={20}
+                          color={active ? palette.secondary : palette.textMuted}
+                        />
+                      </View>
+                    </View>
+                    <Text style={[styles.adhkarArabic, active ? styles.adhkarArabicActive : undefined]}>
+                      {getAzkarText(item)}
+                    </Text>
+                    {item.reference ? <Text style={styles.referenceText}>{String(item.reference)}</Text> : null}
+                    <TouchableOpacity
+                      style={[
+                        styles.tasbihButton,
+                        count > 0 ? styles.tasbihButtonActive : undefined,
+                      ]}
+                      onPress={() =>
+                        setTasbihCounts((current) => ({
+                          ...current,
+                          [index]: Math.min(requiredCount, (current[index] ?? 0) + 1),
+                        }))
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.tasbihCount,
+                          count > 0 ? styles.tasbihCountActive : undefined,
+                        ]}
+                      >
+                        {count}
+                      </Text>
+                      <Text style={styles.tasbihLabel}>Tap</Text>
+                    </TouchableOpacity>
+                  </Pressable>
+                );
+              })
+            : null}
         </>
       ) : null}
 
@@ -505,12 +606,12 @@ export function LibraryScreen() {
           </View>
 
           {hisnTitle ? (
-            <Text style={styles.hisnHeading}>{hisnTitle}</Text>
+            <Text style={[styles.hisnHeading, styles.rtlTitle]}>{hisnTitle}</Text>
           ) : null}
 
           {hisnEntries.map((item, index) => (
             <View key={`hisn-${index}`} style={styles.surfaceCard}>
-              <Text style={styles.hisnIndex}>{String(item.ID ?? `Entry ${index + 1}`)}</Text>
+              <Text style={styles.hisnIndex}>{`Entry ${index + 1}`}</Text>
               <Text style={styles.adhkarArabic}>{String(item.ARABIC_TEXT ?? item.TEXT ?? "")}</Text>
               {item.TRANSLATED_TEXT ? (
                 <Text style={styles.translationBlock}>{String(item.TRANSLATED_TEXT)}</Text>
@@ -839,17 +940,46 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  azkarAudioNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: palette.surfaceLowest,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  azkarAudioNoticeText: {
+    flex: 1,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    lineHeight: 20,
+    color: palette.textMuted,
+  },
   azkarControlMeta: {
     fontFamily: fonts.bodyMedium,
     fontSize: 13,
     lineHeight: 20,
     color: palette.textMuted,
   },
+  azkarControlArabicMeta: {
+    fontFamily: fonts.arabicBold,
+    fontSize: 18,
+    lineHeight: 28,
+    textAlign: "right",
+    writingDirection: "rtl",
+    color: palette.primary,
+  },
   adhkarCard: {
     borderRadius: radii.lg,
     backgroundColor: palette.surfaceLow,
     padding: spacing.xl,
     gap: spacing.md,
+  },
+  adhkarFocusCard: {
+    backgroundColor: palette.surfaceHighest,
+    borderWidth: 1,
+    borderColor: "rgba(15, 73, 56, 0.12)",
   },
   adhkarCardActive: {
     borderWidth: 1,
@@ -867,7 +997,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   adhkarEntryTitle: {
-    fontFamily: fonts.serifBold,
+    fontFamily: fonts.arabicBold,
     fontSize: 22,
     color: palette.primary,
   },
@@ -891,10 +1021,11 @@ const styles = StyleSheet.create({
     color: palette.secondary,
   },
   adhkarArabic: {
-    fontFamily: fonts.serifRegular,
+    fontFamily: fonts.arabicRegular,
     fontSize: 30,
     lineHeight: 48,
     textAlign: "right",
+    writingDirection: "rtl",
     color: palette.primary,
   },
   adhkarArabicActive: {
@@ -959,7 +1090,7 @@ const styles = StyleSheet.create({
     color: palette.onPrimary,
   },
   hisnHeading: {
-    fontFamily: fonts.serifBold,
+    fontFamily: fonts.arabicBold,
     fontSize: 28,
     color: palette.primary,
   },
@@ -973,5 +1104,9 @@ const styles = StyleSheet.create({
   errorText: {
     fontFamily: fonts.bodyMedium,
     color: palette.error,
+  },
+  rtlTitle: {
+    textAlign: "right",
+    writingDirection: "rtl",
   },
 });

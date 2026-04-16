@@ -58,12 +58,12 @@ class QuranAudioViewTests(TestCase):
 
         response = self.client.get(
             reverse("Quran_Audio:home"),
-            {"chapter": 1, "edition": "ar.alafasy"},
+            {"chapter": 1, "edition": "7"},
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["selected_mode"], "listen")
-        self.assertEqual(response.context["selected_audio_edition"], "ar.alafasy")
+        self.assertEqual(response.context["selected_audio_edition"], "7")
         self.assertEqual(response.context["surah_number"], 1)
         self.assertContains(response, "Listen only")
         self.assertContains(response, "Play ayah")

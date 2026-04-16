@@ -2,6 +2,11 @@
 
 `Muslim_AI` is a Django project with an `Islamic_Calender` package that powers the Islamic Calendar experience and displays Gregorian and Hijri dates side by side.
 
+## Mobile clients
+
+- `mobile_flutter/` is now the active mobile app path for Android and iOS.
+- `mobile/` remains in the repo as the earlier Expo prototype and reference implementation during migration.
+
 ## Features
 
 - Convert Gregorian dates to Hijri dates

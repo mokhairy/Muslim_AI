@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
+import Constants from "expo-constants";
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -12,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   fetchQuranSurah,
@@ -28,12 +30,14 @@ const modeOptions = [
   { value: "listen", label: "Listen only" },
   { value: "read_listen", label: "Read while listening" },
 ] as const;
+const supportsLockScreenControls = Constants.executionEnvironment !== "storeClient";
 
 export function QuranScreen() {
+  const insets = useSafeAreaInsets();
   const [surahs, setSurahs] = useState<SurahSummary[]>([]);
   const [surahNumber, setSurahNumber] = useState(1);
-  const [translation, setTranslation] = useState("en.asad");
-  const [reader, setReader] = useState("ar.alafasy");
+  const [translation, setTranslation] = useState<string>(translationOptions[0]?.value ?? "85");
+  const [reader, setReader] = useState<string>(readerOptions[0]?.value ?? "7");
   const [mode, setMode] = useState<(typeof modeOptions)[number]["value"]>("read_listen");
   const [ayahs, setAyahs] = useState<AyahRow[]>([]);
   const [surah, setSurah] = useState<SurahSummary | null>(null);
@@ -51,6 +55,10 @@ export function QuranScreen() {
   });
   const playerStatus = useAudioPlayerStatus(player);
   const isPlaying = Boolean(playerStatus?.playing);
+  const readerLabel = useMemo(
+    () => readerOptions.find((item) => item.value === reader)?.label ?? "Selected Sheikh",
+    [reader],
+  );
 
   const currentAyah = ayahs[currentAyahIndex] ?? null;
 
@@ -103,6 +111,13 @@ export function QuranScreen() {
 
     playbackAyahIndexRef.current = index;
     setCurrentAyahIndex(index);
+    if (supportsLockScreenControls) {
+      player.setActiveForLockScreen(true, {
+        title: `${surah?.englishName ?? "Quran"} · Ayah ${row.numberInSurah}`,
+        artist: readerLabel,
+        albumTitle: "Muslim AI Quran",
+      });
+    }
     player.replace(source);
     player.seekTo(0);
     player.play();
@@ -131,10 +146,15 @@ export function QuranScreen() {
     setAudioModeAsync({
       playsInSilentMode: true,
       interruptionMode: "doNotMix",
-      shouldPlayInBackground: false,
+      shouldPlayInBackground: true,
     }).catch(() => null);
     loadSurahs().catch(() => null);
-  }, []);
+    return () => {
+      if (supportsLockScreenControls) {
+        player.setActiveForLockScreen(false);
+      }
+    };
+  }, [player]);
 
   useEffect(() => {
     loadSurah().catch(() => null);
@@ -184,7 +204,7 @@ export function QuranScreen() {
 
     playbackAyahIndexRef.current = null;
     player.pause();
-  }, [ayahs, currentAyahIndex, mode, player, playerStatus?.didJustFinish]);
+  }, [ayahs, currentAyahIndex, mode, player, playerStatus?.didJustFinish, readerLabel, surah?.englishName]);
 
   return (
     <View style={styles.page}>
@@ -192,7 +212,10 @@ export function QuranScreen() {
         ref={flatListRef}
         data={mode === "listen" ? [] : ayahs}
         keyExtractor={(item) => String(item.numberInSurah)}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + spacing.md, paddingBottom: 188 + insets.bottom },
+        ]}
         onScrollToIndexFailed={({ index, averageItemLength }) => {
           flatListRef.current?.scrollToOffset({
             animated: true,
@@ -392,7 +415,7 @@ export function QuranScreen() {
       />
 
       {currentAyah && mode !== "read" ? (
-        <View style={styles.playerDock}>
+        <View style={[styles.playerDock, { bottom: 102 + insets.bottom }]}>
           <View style={styles.playerTextBlock}>
             <Text style={styles.playerKicker}>
               {surah ? `${surah.englishName} • Ayah ${currentAyah.numberInSurah}` : "Now playing"}
@@ -645,10 +668,11 @@ const styles = StyleSheet.create({
   },
   bannerArabic: {
     marginTop: spacing.sm,
-    fontFamily: fonts.serifBold,
+    fontFamily: fonts.arabicBold,
     fontSize: 44,
     color: palette.onPrimary,
     textAlign: "center",
+    writingDirection: "rtl",
   },
   bannerCopy: {
     marginTop: spacing.xs,
@@ -690,10 +714,11 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   arabicText: {
-    fontFamily: fonts.serifRegular,
+    fontFamily: fonts.arabicRegular,
     fontSize: 32,
     lineHeight: 54,
     textAlign: "right",
+    writingDirection: "rtl",
     color: palette.primary,
   },
   translationText: {

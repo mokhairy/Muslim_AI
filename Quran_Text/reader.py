@@ -14,9 +14,9 @@ from Muslim_AI.islamic_api_helpers import (
     parse_positive_int,
 )
 
-DEFAULT_TRANSLATION_EDITION = "en.asad"
-DEFAULT_AUDIO_EDITION = "ar.alafasy"
-QURAN_STRUCTURE_URL = "https://api.alquran.cloud/v1/surah"
+DEFAULT_TRANSLATION_EDITION = "85"
+DEFAULT_AUDIO_EDITION = "7"
+QURAN_STRUCTURE_URL = "https://api.quran.com/api/v4/chapters?language=en"
 QURAN_READER_MODES = (
     {
         "slug": "read",
@@ -44,61 +44,23 @@ def _normalize_mode(raw_mode: str | None, *, default_mode: str) -> str:
 
 
 def _translation_options() -> list[tuple[str, str]]:
-    editions = fetch_alquran_editions(edition_format="text", edition_type="translation")
-    preferred_order = (
-        "en.asad",
-        "en.pickthall",
-        "en.yusufali",
-        "fr.hamidullah",
-        "ur.jalandhry",
-    )
-    by_identifier = {edition.get("identifier"): edition for edition in editions}
-    options: list[tuple[str, str]] = []
-    for identifier in preferred_order:
-        edition = by_identifier.get(identifier)
-        if not edition:
-            continue
-        options.append(
-            (
-                identifier,
-                f"{edition.get('language', '').upper()} - "
-                f"{edition.get('englishName') or edition.get('name')}",
-            )
-        )
-    if options:
-        return options
     return [
-        ("en.asad", "EN - Muhammad Asad"),
-        ("en.pickthall", "EN - Pickthall"),
-        ("fr.hamidullah", "FR - Hamidullah"),
+        ("85", "EN - Abdel Haleem"),
+        ("19", "EN - Pickthall"),
+        ("22", "EN - Yusuf Ali"),
+        ("31", "FR - Hamidullah"),
+        ("234", "UR - Jalandhry"),
     ]
 
 
 def _audio_options() -> list[tuple[str, str]]:
-    editions = fetch_alquran_editions(edition_format="audio")
-    preferred_order = (
-        "ar.alafasy",
-        "ar.abdulsamad",
-        "ar.abdurrahmaansudais",
-        "ar.shaatree",
-        "ar.mahermuaiqly",
-    )
-    verse_by_verse_editions = [
-        edition
-        for edition in editions
-        if edition.get("type") in {"versebyverse", "audio"}
+    return [
+        ("7", "Sheikh Alafasy"),
+        ("2", "Sheikh Abdul Samad"),
+        ("3", "Sheikh Sudais"),
+        ("4", "Sheikh Abu Bakr Al-Shatri"),
+        ("6", "Sheikh Husary"),
     ]
-    by_identifier = {edition.get("identifier"): edition for edition in verse_by_verse_editions}
-    options: list[tuple[str, str]] = []
-    for identifier in preferred_order:
-        edition = by_identifier.get(identifier)
-        if not edition:
-            continue
-        name = edition.get("englishName") or edition.get("name") or identifier
-        options.append((identifier, f"Sheikh {name}"))
-    if options:
-        return options
-    return [("ar.alafasy", "Sheikh Alafasy")]
 
 
 def _surah_options() -> list[dict[str, object]]:
@@ -118,9 +80,21 @@ def _surah_options() -> list[dict[str, object]]:
         ]
 
     data = payload.get("data") if isinstance(payload, dict) else None
-    if not isinstance(data, list):
+    chapters = payload.get("chapters") if isinstance(payload, dict) else None
+    if not isinstance(chapters, list):
         return []
-    return [item for item in data if isinstance(item, dict)]
+    return [
+        {
+            "number": item.get("id"),
+            "name": item.get("name_arabic"),
+            "englishName": item.get("name_simple"),
+            "englishNameTranslation": (item.get("translated_name") or {}).get("name"),
+            "numberOfAyahs": item.get("verses_count"),
+            "revelationType": item.get("revelation_place"),
+        }
+        for item in chapters
+        if isinstance(item, dict)
+    ]
 
 
 def _pick_valid_option(

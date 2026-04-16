@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppLocation } from "../context/AppLocationContext";
 import { fetchPrayerTimes, type PrayerTimesResponse } from "../lib/api";
@@ -69,6 +70,7 @@ function getNextPrayer(prayerData: PrayerTimesResponse | null) {
 }
 
 export function HomeScreen({ navigateTo }: Props) {
+  const insets = useSafeAreaInsets();
   const { latitude, longitude, label } = useAppLocation();
   const [prayerData, setPrayerData] = useState<PrayerTimesResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +95,14 @@ export function HomeScreen({ navigateTo }: Props) {
   );
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + spacing.md, paddingBottom: 126 + insets.bottom },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.topBar}>
         <View>
           <Text style={styles.brand}>Muslim AI</Text>

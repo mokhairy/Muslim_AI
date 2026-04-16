@@ -35,25 +35,39 @@ export type HadithItem = Record<string, unknown>;
 export type AzkarEntry = Record<string, unknown>;
 export type RadioStation = { id: number; name: string; url: string };
 
+type QuranChapterPayload = {
+  id: number;
+  revelation_place: string;
+  name_arabic: string;
+  name_simple: string;
+  translated_name?: { name?: string };
+  verses_count: number;
+};
+
 const DEFAULT_HEADERS = {
   Accept: "application/json, text/plain, */*",
   "User-Agent": "MuslimAI-Mobile/0.1",
 };
 
+const QURAN_COM_API_BASE = "https://api.quran.com/api/v4";
+const QURAN_VERSE_AUDIO_BASE = "https://verses.quran.com/";
+const azkarSnapshot = require("../data/azkar.snapshot.json") as Record<string, unknown>;
+const hisnMuslim27Snapshot = require("../data/hisn-muslim-27.snapshot.json") as Record<string, unknown>;
+
 export const translationOptions = [
-  { value: "en.asad", label: "English · Muhammad Asad" },
-  { value: "en.pickthall", label: "English · Pickthall" },
-  { value: "en.yusufali", label: "English · Yusuf Ali" },
-  { value: "fr.hamidullah", label: "French · Hamidullah" },
-  { value: "ur.jalandhry", label: "Urdu · Jalandhry" },
+  { value: "85", label: "English · Abdel Haleem" },
+  { value: "19", label: "English · Pickthall" },
+  { value: "22", label: "English · Yusuf Ali" },
+  { value: "31", label: "French · Hamidullah" },
+  { value: "234", label: "Urdu · Jalandhry" },
 ] as const;
 
 export const readerOptions = [
-  { value: "ar.alafasy", label: "Sheikh Alafasy" },
-  { value: "ar.abdulsamad", label: "Sheikh Abdul Samad" },
-  { value: "ar.abdurrahmaansudais", label: "Sheikh Sudais" },
-  { value: "ar.shaatree", label: "Sheikh Shatri" },
-  { value: "ar.mahermuaiqly", label: "Sheikh Maher Al Muaiqly" },
+  { value: "7", label: "Sheikh Alafasy" },
+  { value: "2", label: "Sheikh Abdul Samad" },
+  { value: "3", label: "Sheikh Sudais" },
+  { value: "4", label: "Sheikh Abu Bakr Al-Shatri" },
+  { value: "6", label: "Sheikh Husary" },
 ] as const;
 
 export const hadithCollections = [
@@ -115,11 +129,27 @@ async function fetchJsonWithTimeout<T>(
       throw new Error(`Request failed with status ${response.status}`);
     }
 
-    return (await response.json()) as T;
+    const rawText = await response.text();
+    return parseJsonPayload<T>(rawText, url);
   } finally {
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
+  }
+}
+
+function parseJsonPayload<T>(rawText: string, url: string): T {
+  const cleanedText = rawText.replace(/^\uFEFF/, "").trim();
+
+  if (!cleanedText) {
+    throw new Error(`Empty JSON response from ${url}`);
+  }
+
+  try {
+    return JSON.parse(cleanedText) as T;
+  } catch {
+    const preview = cleanedText.slice(0, 80).replace(/\s+/g, " ");
+    throw new Error(`Invalid JSON response from ${url}: ${preview}`);
   }
 }
 
@@ -128,11 +158,55 @@ async function fetchJson<T>(url: string): Promise<T> {
   if (!response.ok) {
     throw new Error(`Request failed with status ${response.status}`);
   }
-  return (await response.json()) as T;
+  const rawText = await response.text();
+  return parseJsonPayload<T>(rawText, url);
 }
 
 function cleanTimingLabel(rawValue: string): string {
   return rawValue.split(" ", 1)[0].trim();
+}
+
+function sanitizeTranslationText(rawValue: unknown): string {
+  return String(rawValue ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function toAbsoluteVerseAudioUrl(rawValue: unknown): string {
+  const url = String(rawValue ?? "").trim();
+  if (!url) {
+    return "";
+  }
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+  return `${QURAN_VERSE_AUDIO_BASE}${url.replace(/^\/+/, "")}`;
+}
+
+async function fetchAllQuranPages<T>(buildUrl: (page: number) => string, key: string): Promise<T[]> {
+  const items: T[] = [];
+  let page = 1;
+
+  while (true) {
+    const payload = await fetchJson<any>(buildUrl(page));
+    const pageItems = Array.isArray(payload?.[key]) ? payload[key] : [];
+    items.push(...pageItems);
+
+    const nextPage = payload?.pagination?.next_page;
+    if (!nextPage) {
+      break;
+    }
+    page = Number(nextPage);
+    if (!Number.isFinite(page) || page < 1) {
+      break;
+    }
+  }
+
+  return items;
 }
 
 function secondaryAudioUrl(payload: Record<string, unknown>): string {
@@ -191,8 +265,19 @@ export async function fetchQibla(
 }
 
 export async function fetchSurahList(): Promise<SurahSummary[]> {
-  const payload = await fetchJson<any>("https://api.alquran.cloud/v1/surah");
-  return Array.isArray(payload.data) ? payload.data : [];
+  const payload = await fetchJson<{ chapters?: QuranChapterPayload[] }>(
+    `${QURAN_COM_API_BASE}/chapters?language=en`,
+  );
+  return Array.isArray(payload.chapters)
+    ? payload.chapters.map((item) => ({
+        number: item.id,
+        name: item.name_arabic,
+        englishName: item.name_simple,
+        englishNameTranslation: item.translated_name?.name ?? "",
+        numberOfAyahs: item.verses_count,
+        revelationType: item.revelation_place,
+      }))
+    : [];
 }
 
 export async function fetchQuranSurah(
@@ -200,42 +285,65 @@ export async function fetchQuranSurah(
   translation: string,
   reader: string,
 ): Promise<{ surah: SurahSummary | null; ayahs: AyahRow[] }> {
-  const [translationPayload, audioPayload] = await Promise.all([
-    fetchJson<any>(
-      `https://api.alquran.cloud/v1/surah/${surahNumber}/editions/quran-uthmani,${translation}`,
+  const [chapterPayload, arabicPayload, translationPayload, audioPayload] = await Promise.all([
+    fetchJson<{ chapter?: QuranChapterPayload }>(`${QURAN_COM_API_BASE}/chapters/${surahNumber}?language=en`),
+    fetchJson<{ verses?: Array<{ verse_key: string; text_uthmani: string }> }>(
+      `${QURAN_COM_API_BASE}/quran/verses/uthmani?chapter_number=${surahNumber}`,
     ),
-    fetchJson<any>(`https://api.alquran.cloud/v1/surah/${surahNumber}/${reader}`),
+    fetchAllQuranPages<any>(
+      (page) =>
+        `${QURAN_COM_API_BASE}/verses/by_chapter/${surahNumber}?language=en&words=false&translations=${translation}&per_page=50&page=${page}&fields=chapter_id,verse_key,juz_number,hizb_number,page_number,manzil_number`,
+      "verses",
+    ),
+    fetchAllQuranPages<any>(
+      (page) => `${QURAN_COM_API_BASE}/recitations/${reader}/by_chapter/${surahNumber}?per_page=50&page=${page}`,
+      "audio_files",
+    ),
   ]);
 
-  const translationEditions = Array.isArray(translationPayload.data)
-    ? translationPayload.data
-    : [];
-  const arabicEdition = translationEditions[0] ?? null;
-  const translatedEdition = translationEditions[1] ?? null;
-  const audioSurah = audioPayload.data ?? null;
-  const audioByAyah = new Map<number, Record<string, unknown>>();
+  const chapter = chapterPayload.chapter;
+  const arabicVerses = Array.isArray(arabicPayload.verses) ? arabicPayload.verses : [];
+  const translationByVerseKey = new Map<string, any>();
+  const audioByVerseKey = new Map<string, any>();
 
-  for (const ayah of audioSurah?.ayahs ?? []) {
-    if (ayah && typeof ayah.numberInSurah === "number") {
-      audioByAyah.set(ayah.numberInSurah, ayah);
+  for (const verse of translationPayload) {
+    if (verse && typeof verse.verse_key === "string") {
+      translationByVerseKey.set(verse.verse_key, verse);
     }
   }
 
-  const ayahs: AyahRow[] = [];
-  for (const [index, arabicAyah] of (arabicEdition?.ayahs ?? []).entries()) {
-    const translationAyah = translatedEdition?.ayahs?.[index] ?? {};
-    const audioAyah = audioByAyah.get(arabicAyah.numberInSurah) ?? {};
-    ayahs.push({
-      numberInSurah: arabicAyah.numberInSurah ?? index + 1,
-      arabicText: arabicAyah.text ?? "",
-      translationText: translationAyah.text ?? "",
-      audioUrl: typeof audioAyah.audio === "string" ? audioAyah.audio : "",
-      audioSecondaryUrl: secondaryAudioUrl(audioAyah),
-    });
+  for (const verse of audioPayload) {
+    if (verse && typeof verse.verse_key === "string") {
+      audioByVerseKey.set(verse.verse_key, verse);
+    }
   }
 
+  const ayahs: AyahRow[] = arabicVerses.map((verse, index) => {
+    const verseKey = verse.verse_key;
+    const meta = translationByVerseKey.get(verseKey) ?? {};
+    const audio = audioByVerseKey.get(verseKey) ?? {};
+    const verseNumber = Number(String(verseKey).split(":")[1] ?? index + 1);
+
+    return {
+      numberInSurah: Number.isFinite(verseNumber) ? verseNumber : index + 1,
+      arabicText: String(verse.text_uthmani ?? "").trim(),
+      translationText: sanitizeTranslationText(meta?.translations?.[0]?.text ?? ""),
+      audioUrl: toAbsoluteVerseAudioUrl(audio?.url),
+      audioSecondaryUrl: "",
+    };
+  });
+
   return {
-    surah: translatedEdition ?? audioSurah ?? null,
+    surah: chapter
+      ? {
+          number: chapter.id,
+          name: chapter.name_arabic,
+          englishName: chapter.name_simple,
+          englishNameTranslation: chapter.translated_name?.name ?? "",
+          numberOfAyahs: chapter.verses_count,
+          revelationType: chapter.revelation_place,
+        }
+      : null,
     ayahs,
   };
 }
@@ -270,7 +378,7 @@ function flattenAzkarEntries(node: unknown): AzkarEntry[] {
 }
 
 export async function fetchAzkarCategory(selectedCategory?: string) {
-  const payload = await fetchJson<Record<string, unknown>>(AZKAR_SOURCE_URL);
+  const payload = azkarSnapshot;
   const categories = Object.keys(payload);
   const activeCategory = selectedCategory && payload[selectedCategory] ? selectedCategory : categories[0];
   return {
@@ -281,9 +389,10 @@ export async function fetchAzkarCategory(selectedCategory?: string) {
 }
 
 export async function fetchHisnMuslim(collectionId: number) {
-  const payload = await fetchJson<Record<string, unknown>>(
-    `https://www.hisnmuslim.com/api/ar/${collectionId}.json`,
-  );
+  const payload =
+    collectionId === 27
+      ? hisnMuslim27Snapshot
+      : await fetchJson<Record<string, unknown>>(`https://www.hisnmuslim.com/api/ar/${collectionId}.json`);
   const [categoryName = "", rawEntries = []] = Object.entries(payload)[0] ?? ["", []];
   return {
     categoryName,

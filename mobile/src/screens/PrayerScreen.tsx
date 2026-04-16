@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   ScrollView,
   Switch,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppLocation } from "../context/AppLocationContext";
 import { usePrayerAutomation } from "../context/PrayerAutomationContext";
@@ -41,13 +43,18 @@ function nextPrayerLabel(prayerData: PrayerTimesResponse | null) {
 }
 
 export function PrayerScreen() {
+  const insets = useSafeAreaInsets();
   const {
     latitude: sharedLatitude,
     longitude: sharedLongitude,
     label,
     isResolving,
+    permissionState: locationPermissionState,
+    locationServicesEnabled,
+    statusMessage: locationStatusMessage,
     refreshFromDevice,
     setManualCoordinates,
+    openSystemSettings,
   } = useAppLocation();
   const {
     enabled: automationEnabled,
@@ -98,7 +105,17 @@ export function PrayerScreen() {
   async function useCurrentLocation() {
     const refreshed = await refreshFromDevice();
     if (!refreshed) {
-      Alert.alert("Location permission denied", "Enable location access to use current prayer times.");
+      Alert.alert("Location update unavailable", locationStatusMessage, [
+        (locationPermissionState === "denied" || !locationServicesEnabled)
+          ? {
+              text: "Open Settings",
+              onPress: () => {
+                openSystemSettings().catch(() => Linking.openSettings().catch(() => null));
+              },
+            }
+          : undefined,
+        { text: "OK", style: "cancel" },
+      ].filter(Boolean) as { text: string; style?: "cancel"; onPress?: () => void }[]);
       return;
     }
   }
@@ -142,7 +159,14 @@ export function PrayerScreen() {
   }
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + spacing.md, paddingBottom: 126 + insets.bottom },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.topBar}>
         <View>
           <Text style={styles.brand}>Qibla Direction</Text>
@@ -243,6 +267,7 @@ export function PrayerScreen() {
           </TouchableOpacity>
         </View>
         {loading ? <ActivityIndicator color={palette.primary} style={styles.loader} /> : null}
+        <Text style={styles.locationHint}>{locationStatusMessage}</Text>
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </View>
 
@@ -695,6 +720,12 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginTop: spacing.xs,
+  },
+  locationHint: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    lineHeight: 20,
+    color: palette.textMuted,
   },
   errorText: {
     fontFamily: fonts.bodyMedium,

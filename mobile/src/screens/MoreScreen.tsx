@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
+import Constants from "expo-constants";
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { useEffect, useState } from "react";
 import {
@@ -11,11 +12,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fetchRadioStations, type RadioStation } from "../lib/api";
 import { fonts, palette, radii, shadows, spacing } from "../theme";
 
 const LIVE_WEB_URL = "https://muslimai.geointel.ca/";
+const supportsLockScreenControls = Constants.executionEnvironment !== "storeClient";
 
 const platformNotes = [
   "The mobile shell already consumes the same prayer, Quran, hadith, azkar, and radio APIs as the web app.",
@@ -24,6 +27,7 @@ const platformNotes = [
 ];
 
 export function MoreScreen() {
+  const insets = useSafeAreaInsets();
   const [stations, setStations] = useState<RadioStation[]>([]);
   const [selectedStationId, setSelectedStationId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -63,6 +67,13 @@ export function MoreScreen() {
       return;
     }
 
+    if (supportsLockScreenControls) {
+      player.setActiveForLockScreen(true, {
+        title: selectedStation.name,
+        artist: "Muslim AI Radio",
+        albumTitle: "Live Islamic Radio",
+      });
+    }
     player.replace(selectedStation.url);
     player.seekTo(0);
     player.play();
@@ -72,13 +83,25 @@ export function MoreScreen() {
     setAudioModeAsync({
       playsInSilentMode: true,
       interruptionMode: "doNotMix",
-      shouldPlayInBackground: false,
+      shouldPlayInBackground: true,
     }).catch(() => null);
     loadStations().catch(() => null);
-  }, []);
+    return () => {
+      if (supportsLockScreenControls) {
+        player.setActiveForLockScreen(false);
+      }
+    };
+  }, [player]);
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + spacing.md, paddingBottom: 126 + insets.bottom },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.topBar}>
         <Text style={styles.brand}>Muslim AI</Text>
         <View style={styles.profileDot} />

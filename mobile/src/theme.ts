@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 export const palette = {
   background: "#fbf9f5",
   surface: "#fbf9f5",
@@ -53,6 +55,16 @@ export const fonts = {
   bodyMedium: "Manrope_500Medium",
   bodySemiBold: "Manrope_600SemiBold",
   bodyBold: "Manrope_700Bold",
+  arabicRegular: Platform.select({
+    ios: "Geeza Pro",
+    android: "serif",
+    default: "serif",
+  }) as string,
+  arabicBold: Platform.select({
+    ios: "Geeza Pro Bold",
+    android: "serif",
+    default: "serif",
+  }) as string,
 };
 
 export const shadows = {

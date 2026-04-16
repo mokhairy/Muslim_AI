@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
-import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { AppState, type AppStateStatus, Platform } from "react-native";
 import {
   createContext,
@@ -16,20 +16,35 @@ import {
 import { fetchPrayerTimes } from "../lib/api";
 import { useAppLocation } from "./AppLocationContext";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
-});
+type NotificationsModule = typeof import("expo-notifications");
+type NotificationPermissionResponse = {
+  granted: boolean;
+  canAskAgain: boolean;
+};
+
+const Notifications: NotificationsModule | null =
+  Constants.executionEnvironment === "storeClient"
+    ? null
+    : (require("expo-notifications") as NotificationsModule);
+
+if (Notifications) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 const STORAGE_KEY = "muslimai:prayer-automation:v1";
 const PRAYER_NOTIFICATION_CHANNEL_ID = "prayer-reminders";
 const DEFAULT_ADHAN_STREAM_URL = "https://www.islamcan.com/audio/adhan/azan1.mp3";
 const SCHEDULE_LOOKAHEAD_DAYS = 7;
 const PRAYER_NAMES = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"] as const;
+const NOTIFICATIONS_UNAVAILABLE_MESSAGE =
+  "Prayer reminders require a development build or standalone app. Expo Go does not support them here.";
 
 type PrayerName = (typeof PRAYER_NAMES)[number];
 type PermissionState = "granted" | "denied" | "undetermined";
@@ -126,6 +141,9 @@ async function persistState(state: PersistedPrayerAutomationState) {
 }
 
 async function cancelScheduledNotifications(notificationIds: string[]) {
+  if (!Notifications) {
+    return;
+  }
   await Promise.all(
     notificationIds.map((notificationId) =>
       Notifications.cancelScheduledNotificationAsync(notificationId).catch(() => null),
@@ -134,6 +152,12 @@ async function cancelScheduledNotifications(notificationIds: string[]) {
 }
 
 async function ensureNotificationPermission() {
+  if (!Notifications) {
+    return {
+      granted: false,
+      canAskAgain: false,
+    } satisfies NotificationPermissionResponse;
+  }
   let permissionResponse = await Notifications.getPermissionsAsync();
   if (!permissionResponse.granted && permissionResponse.canAskAgain !== false) {
     permissionResponse = await Notifications.requestPermissionsAsync();
@@ -141,7 +165,7 @@ async function ensureNotificationPermission() {
   return permissionResponse;
 }
 
-function toPermissionState(permissionResponse: Notifications.NotificationPermissionsStatus): PermissionState {
+function toPermissionState(permissionResponse: NotificationPermissionResponse): PermissionState {
   if (permissionResponse.granted) {
     return "granted";
   }
@@ -216,7 +240,7 @@ export function PrayerAutomationProvider({ children }: { children: ReactNode }) 
   }, []);
 
   useEffect(() => {
-    if (Platform.OS !== "android") {
+    if (!Notifications || Platform.OS !== "android") {
       return;
     }
     Notifications.setNotificationChannelAsync(PRAYER_NOTIFICATION_CHANNEL_ID, {
@@ -229,17 +253,37 @@ export function PrayerAutomationProvider({ children }: { children: ReactNode }) 
   }, []);
 
   useEffect(() => {
-    loadStoredState()
-      .then((storedState) => {
-        setPersistedState(storedState);
-        return Notifications.getPermissionsAsync();
-      })
-      .then((permissionResponse) => {
-        setPermissionState(toPermissionState(permissionResponse));
-      })
+    let isCancelled = false;
+
+    async function hydrateState() {
+      const storedState = await loadStoredState();
+      if (isCancelled) {
+        return;
+      }
+
+      setPersistedState(storedState);
+      const permissionResponse: NotificationPermissionResponse = Notifications
+        ? await Notifications.getPermissionsAsync()
+        : {
+            granted: false,
+            canAskAgain: false,
+          };
+      if (isCancelled) {
+        return;
+      }
+
+      setPermissionState(toPermissionState(permissionResponse));
+    }
+
+    hydrateState()
+      .catch(() => null)
       .finally(() => {
         setIsHydrated(true);
       });
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -293,6 +337,10 @@ export function PrayerAutomationProvider({ children }: { children: ReactNode }) 
       setIsSyncing(true);
       setSyncError("");
       try {
+        if (!Notifications) {
+          throw new Error(NOTIFICATIONS_UNAVAILABLE_MESSAGE);
+        }
+
         const permissionResponse = await ensureNotificationPermission();
         const nextPermissionState = toPermissionState(permissionResponse);
         setPermissionState(nextPermissionState);
@@ -412,6 +460,12 @@ export function PrayerAutomationProvider({ children }: { children: ReactNode }) 
   }, [appState, persistedState.enabled, player, upcomingReminders]);
 
   const enableAutomation = useCallback(async () => {
+    if (!Notifications) {
+      setPermissionState("denied");
+      setSyncError(NOTIFICATIONS_UNAVAILABLE_MESSAGE);
+      return false;
+    }
+
     const permissionResponse = await ensureNotificationPermission();
     const nextPermissionState = toPermissionState(permissionResponse);
     setPermissionState(nextPermissionState);
@@ -470,7 +524,9 @@ export function PrayerAutomationProvider({ children }: { children: ReactNode }) 
 
   const statusMessage = persistedState.enabled
     ? "This phase schedules local reminders and plays adhan on this device while the app is open."
-    : "Enable local prayer reminders to schedule adhan alerts on this device only.";
+    : Notifications
+      ? "Enable local prayer reminders to schedule adhan alerts on this device only."
+      : NOTIFICATIONS_UNAVAILABLE_MESSAGE;
 
   const value = useMemo(
     () => ({
