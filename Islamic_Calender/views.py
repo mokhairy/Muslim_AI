@@ -886,3 +886,14 @@ def resources(request: HttpRequest) -> HttpResponse:
         "today_record": today_record(mode),
     }
     return render(request, "Islamic_Calender/resources.html", context)
+
+
+def privacy_policy(request: HttpRequest) -> HttpResponse:
+    mode = current_calendar_mode(request)
+    context = {
+        "active_page": "privacy",
+        "calendar_modes": list(CALENDAR_MODES.values()),
+        "current_calendar_mode": mode,
+        "today_record": today_record(mode),
+    }
+    return render(request, "Islamic_Calender/privacy_policy.html", context)

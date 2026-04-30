@@ -128,6 +128,13 @@ class HomeViewTests(TestCase):
         self.assertContains(response, "AlQuran.Cloud")
         self.assertContains(response, "Latest Friday Sermons")
 
+    def test_privacy_policy_page_renders(self):
+        response = self.client.get(reverse("Islamic_Calender:privacy_policy"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Privacy Policy")
+        self.assertContains(response, "MuslimAI is an Islamic companion app")
+        self.assertContains(response, "mkhairy@londontrade.ca")
+
 
 class RamadanAnalysisHelperTests(TestCase):
     def test_ramadan_last_ten_days_are_derived_from_month_length(self):

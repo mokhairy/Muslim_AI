@@ -27,6 +27,7 @@
                 <div class="sidebar-utility-links">
                     <a class="sidebar-utility-link{% if active_page == 'branding' %} active{% endif %}" href="{% url 'Islamic_Calender:branding' %}?calendar_mode={{ current_calendar_mode.slug }}">Brand Kits</a>
                     <a class="sidebar-utility-link{% if active_page == 'resources' %} active{% endif %}" href="{% url 'Islamic_Calender:resources' %}?calendar_mode={{ current_calendar_mode.slug }}">Resources</a>
+                    <a class="sidebar-utility-link{% if active_page == 'privacy' %} active{% endif %}" href="{% url 'Islamic_Calender:privacy_policy' %}?calendar_mode={{ current_calendar_mode.slug }}">Privacy</a>
                 </div>
             </div>
 
@@ -119,6 +120,7 @@
         <div class="site-footer-inner">
             <p class="site-footer-copy">Author Mohamed Khairy</p>
             <a class="site-footer-link" href="mailto:mkhairy@londontrade.ca">mkhairy@londontrade.ca</a>
+            <a class="site-footer-link" href="{% url 'Islamic_Calender:privacy_policy' %}">Privacy Policy</a>
             <p class="site-footer-copy">Copyright © londontrade corporate</p>
         </div>
     </footer>
