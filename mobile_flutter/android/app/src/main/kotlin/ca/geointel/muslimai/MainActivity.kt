@@ -1,4 +1,4 @@
-package com.example.mobile_flutter
+package ca.geointel.muslimai
 
 import com.ryanheise.audioservice.AudioServiceActivity
 
