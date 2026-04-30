@@ -4,6 +4,9 @@ __pycache__/
 db.sqlite3
 .env
 .DS_Store
+.vscode/
+Xcode_repo/
 .playwright-mcp/
 staticfiles/
 /stitch.zip
+mobile_flutter/ios/build/
