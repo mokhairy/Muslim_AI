@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../screenshot_scene.dart';
 import '../models/library_models.dart';
 import '../services/adhkar_audio_catalog.dart';
 import '../services/library_service.dart';
@@ -22,9 +23,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final _service = LibraryService();
   final _adhkarPlayer = AudioPlayer();
 
-  LibrarySection _section = LibrarySection.hadith;
-  AdhkarMode _adhkarMode = AdhkarMode.read;
-  String _azkarCategory = '';
+  LibrarySection _section = AppScreenshotScene.librarySection == 'adhkar'
+      ? LibrarySection.adhkar
+      : AppScreenshotScene.librarySection == 'hisn'
+      ? LibrarySection.hisn
+      : LibrarySection.hadith;
+  AdhkarMode _adhkarMode = AppScreenshotScene.adhkarMode == 'read_listen'
+      ? AdhkarMode.readListen
+      : AppScreenshotScene.adhkarMode == 'listen'
+      ? AdhkarMode.listen
+      : AdhkarMode.read;
+  String _azkarCategory = AppScreenshotScene.adhkarCategory ?? '';
   bool _loading = true;
   bool _adhkarAudioLoading = false;
   bool _adhkarAudioPlaying = false;

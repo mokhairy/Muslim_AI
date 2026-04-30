@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../screenshot_scene.dart';
 import '../services/quran_audio_controller.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
@@ -16,7 +17,7 @@ class ShellScreen extends StatefulWidget {
 
 class _ShellScreenState extends State<ShellScreen> {
   final _audioController = QuranAudioController.instance;
-  int _index = 0;
+  int _index = AppScreenshotScene.initialTabIndex;
 
   static const _screens = [
     HomeScreen(),

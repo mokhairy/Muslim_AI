@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../screenshot_scene.dart';
 import '../models/quran_models.dart';
 import '../services/app_preferences_service.dart';
 import '../services/quran_audio_controller.dart';
@@ -79,12 +80,22 @@ class _QuranScreenState extends State<QuranScreen> {
     });
 
     try {
-      final session = await _preferences.loadQuranSession(
-        defaultSurahNumber: _surahNumber,
-        defaultTranslationId: _translation,
-        defaultReaderId: _reader,
-        defaultMode: _quranModeValue(_mode),
-      );
+      final screenshotMode = AppScreenshotScene.quranMode;
+      final session = screenshotMode == null
+          ? await _preferences.loadQuranSession(
+              defaultSurahNumber: _surahNumber,
+              defaultTranslationId: _translation,
+              defaultReaderId: _reader,
+              defaultMode: _quranModeValue(_mode),
+            )
+          : QuranSessionSnapshot(
+              surahNumber: 2,
+              translationId: '85',
+              readerId: '7',
+              mode: screenshotMode,
+              activeAyahIndex: 1,
+              bookmarkedVerses: const {'2:2', '2:3', '2:5'},
+            );
 
       final surahs = await _service.fetchSurahList();
       final detail = await _service.fetchSurahDetail(
