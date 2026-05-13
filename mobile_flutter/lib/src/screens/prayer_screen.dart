@@ -176,7 +176,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
         Text('Prayer Times', style: textTheme.headlineSmall),
         const SizedBox(height: 8),
         Text(
-          'AlAdhan-backed prayer schedule with saved coordinates and a device-location shortcut for accurate local prayer times.',
+          'AlAdhan-backed prayer schedule with saved coordinates and a device-location shortcut for accurate local prayer times. Qibla is computed locally on-device from your coordinates.',
           style: textTheme.bodyMedium,
         ),
         const SizedBox(height: 16),

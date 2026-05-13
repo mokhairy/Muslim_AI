@@ -1,9 +1,13 @@
 import 'package:intl/intl.dart';
+import 'dart:math' as math;
 
 import '../models/prayer_models.dart';
 import 'http_json.dart';
 
 class PrayerService {
+  static const _kaabaLatitude = 21.4225;
+  static const _kaabaLongitude = 39.8262;
+
   Future<PrayerTimesResponse> fetchPrayerTimes({
     required DateTime date,
     required double latitude,
@@ -51,18 +55,34 @@ class PrayerService {
     required double latitude,
     required double longitude,
   }) async {
-    final payload =
-        await fetchJson('https://api.aladhan.com/v1/qibla/$latitude/$longitude')
-            as Map<String, dynamic>;
-
-    if (payload['code'] != 200) {
-      throw Exception(payload['status']?.toString() ?? 'Qibla lookup failed');
-    }
-
     return QiblaResponse(
-      direction: (payload['data']['direction'] as num).toDouble(),
+      direction: _computeQiblaDirection(
+        latitude: latitude,
+        longitude: longitude,
+      ),
       latitude: latitude,
       longitude: longitude,
     );
   }
+
+  double _computeQiblaDirection({
+    required double latitude,
+    required double longitude,
+  }) {
+    final latRad = _toRadians(latitude);
+    final deltaLonRad = _toRadians(_kaabaLongitude - longitude);
+    final kaabaLatRad = _toRadians(_kaabaLatitude);
+
+    final y = math.sin(deltaLonRad);
+    final x =
+        math.cos(latRad) * math.tan(kaabaLatRad) -
+        math.sin(latRad) * math.cos(deltaLonRad);
+
+    final bearing = _toDegrees(math.atan2(y, x));
+    return (bearing + 360) % 360;
+  }
+
+  double _toRadians(double degrees) => degrees * math.pi / 180.0;
+
+  double _toDegrees(double radians) => radians * 180.0 / math.pi;
 }
