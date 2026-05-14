@@ -15,23 +15,29 @@ class AdhkarEntry {
     required this.title,
     required this.text,
     required this.repeatCount,
+    required this.reference,
+    required this.audioUrls,
   });
 
   final String title;
   final String text;
   final int repeatCount;
+  final String reference;
+  final List<String> audioUrls;
 }
 
 class AdhkarAudioSource {
   const AdhkarAudioSource({
-    required this.url,
     required this.label,
     required this.supportsEntrySync,
+    this.url,
+    this.voiceDescription = '',
   });
 
-  final String url;
   final String label;
   final bool supportsEntrySync;
+  final String? url;
+  final String voiceDescription;
 }
 
 class AdhkarCategoryData {
@@ -39,11 +45,13 @@ class AdhkarCategoryData {
     required this.categories,
     required this.selectedCategory,
     required this.entries,
+    this.audioSource,
   });
 
   final List<String> categories;
   final String selectedCategory;
   final List<AdhkarEntry> entries;
+  final AdhkarAudioSource? audioSource;
 }
 
 class HisnMuslimData {

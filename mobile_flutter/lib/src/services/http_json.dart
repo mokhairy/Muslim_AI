@@ -8,7 +8,9 @@ const _defaultHeaders = {
 };
 
 Future<dynamic> fetchJson(String url) async {
-  final response = await http.get(Uri.parse(url), headers: _defaultHeaders);
+  final response = await http
+      .get(Uri.parse(url), headers: _defaultHeaders)
+      .timeout(const Duration(seconds: 20));
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw Exception(
       'Request failed with status ${response.statusCode} for $url',

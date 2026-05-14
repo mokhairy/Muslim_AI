@@ -5,6 +5,7 @@ import '../models/quran_models.dart';
 import '../services/app_preferences_service.dart';
 import '../services/quran_audio_controller.dart';
 import '../services/quran_service.dart';
+import '../widgets/arabic_text.dart';
 
 enum QuranMode { read, listen, readListen }
 
@@ -470,9 +471,9 @@ class _SurahHeader extends StatelessWidget {
           children: [
             Text(surah.englishName, style: textTheme.headlineSmall),
             const SizedBox(height: 4),
-            Directionality(
-              textDirection: TextDirection.rtl,
-              child: Text(
+            Align(
+              alignment: Alignment.centerRight,
+              child: ArabicText(
                 surah.name,
                 style: textTheme.displaySmall?.copyWith(fontSize: 30),
               ),
@@ -535,11 +536,10 @@ class _AyahCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Directionality(
-              textDirection: TextDirection.rtl,
-              child: Text(
+            Align(
+              alignment: Alignment.centerRight,
+              child: ArabicText(
                 ayah.arabicText,
-                textAlign: TextAlign.right,
                 style: theme.textTheme.headlineSmall?.copyWith(height: 1.7),
               ),
             ),
@@ -588,11 +588,10 @@ class _ListenOnlyCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             if (ayah != null) ...[
-              Directionality(
-                textDirection: TextDirection.rtl,
-                child: Text(
+              Align(
+                alignment: Alignment.centerRight,
+                child: ArabicText(
                   ayah!.arabicText,
-                  textAlign: TextAlign.right,
                   style: textTheme.headlineSmall,
                 ),
               ),

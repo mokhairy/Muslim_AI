@@ -1,12 +1,13 @@
 import 'dart:async';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
-import '../screenshot_scene.dart';
 import '../models/library_models.dart';
-import '../services/adhkar_audio_catalog.dart';
+import '../screenshot_scene.dart';
 import '../services/library_service.dart';
+import '../widgets/arabic_text.dart';
 
 enum LibrarySection { hadith, adhkar, hisn }
 
@@ -37,13 +38,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
   bool _loading = true;
   bool _adhkarAudioLoading = false;
   bool _adhkarAudioPlaying = false;
+  bool _adhkarUsesEntrySync = false;
+  int _adhkarActiveEntryIndex = 0;
   String _error = '';
-  String _loadedAdhkarUrl = '';
+  String _loadedAdhkarSignature = '';
   List<HadithItem> _hadithItems = const [];
+  List<int> _adhkarTrackToEntryIndex = const [];
   AdhkarCategoryData? _adhkarData;
   HisnMuslimData? _hisnData;
   AdhkarAudioSource? _adhkarAudioSource;
   StreamSubscription<PlayerState>? _adhkarPlayerStateSubscription;
+  StreamSubscription<int?>? _adhkarCurrentIndexSubscription;
 
   @override
   void initState() {
@@ -61,12 +66,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
         _adhkarAudioPlaying = state.playing;
       });
     });
+    _adhkarCurrentIndexSubscription = _adhkarPlayer.currentIndexStream.listen((
+      index,
+    ) {
+      if (!mounted || !_adhkarUsesEntrySync || index == null) {
+        return;
+      }
+      if (index < 0 || index >= _adhkarTrackToEntryIndex.length) {
+        return;
+      }
+      setState(() => _adhkarActiveEntryIndex = _adhkarTrackToEntryIndex[index]);
+    });
     _load();
   }
 
   @override
   void dispose() {
     _adhkarPlayerStateSubscription?.cancel();
+    _adhkarCurrentIndexSubscription?.cancel();
     _adhkarPlayer.dispose();
     super.dispose();
   }
@@ -94,22 +111,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
         final adhkar = await _service.fetchAzkarCategory(
           _azkarCategory.isEmpty ? null : _azkarCategory,
         );
-        final audioSource =
-            AdhkarAudioCatalog.categoryAudio[adhkar.selectedCategory];
+        await _resetAdhkarPlaybackForCategory(adhkar);
         if (!mounted) {
           return;
         }
         setState(() {
           _adhkarData = adhkar;
           _azkarCategory = adhkar.selectedCategory;
-          _adhkarAudioSource = audioSource;
+          _adhkarAudioSource = adhkar.audioSource;
           _loading = false;
         });
-        if (_loadedAdhkarUrl.isNotEmpty &&
-            audioSource?.url != _loadedAdhkarUrl) {
-          await _adhkarPlayer.stop();
-          _loadedAdhkarUrl = '';
-        }
         return;
       }
 
@@ -132,17 +143,111 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
-  Future<void> _ensureAdhkarAudioLoaded() async {
-    final source = _adhkarAudioSource;
-    if (source == null) {
-      return;
-    }
-    if (_loadedAdhkarUrl == source.url) {
+  Future<void> _resetAdhkarPlaybackForCategory(
+    AdhkarCategoryData categoryData,
+  ) async {
+    final nextSignature = _buildAdhkarAudioSignature(categoryData);
+    if (_loadedAdhkarSignature == nextSignature) {
       return;
     }
 
-    await _adhkarPlayer.setUrl(source.url);
-    _loadedAdhkarUrl = source.url;
+    await _adhkarPlayer.stop();
+    _loadedAdhkarSignature = '';
+    _adhkarTrackToEntryIndex = const [];
+    _adhkarUsesEntrySync = false;
+    _adhkarActiveEntryIndex = 0;
+  }
+
+  Future<void> _ensureAdhkarAudioLoaded() async {
+    final data = _adhkarData;
+    final source = _adhkarAudioSource;
+    if (data == null || source == null) {
+      return;
+    }
+
+    final signature = _buildAdhkarAudioSignature(data);
+    if (_loadedAdhkarSignature == signature) {
+      return;
+    }
+
+    if (source.supportsEntrySync) {
+      final trackUrls = <String>[];
+      final trackToEntryIndex = <int>[];
+      for (var entryIndex = 0; entryIndex < data.entries.length; entryIndex++) {
+        final entry = data.entries[entryIndex];
+        for (final url in entry.audioUrls) {
+          if (url.isEmpty) {
+            continue;
+          }
+          trackUrls.add(url);
+          trackToEntryIndex.add(entryIndex);
+        }
+      }
+
+      if (trackUrls.isEmpty) {
+        return;
+      }
+
+      await _adhkarPlayer.setAudioSources(
+        [
+          for (var trackIndex = 0; trackIndex < trackUrls.length; trackIndex++)
+            AudioSource.uri(
+              Uri.parse(trackUrls[trackIndex]),
+              tag: _buildAdhkarMediaItem(
+                entryIndex: trackToEntryIndex[trackIndex],
+                url: trackUrls[trackIndex],
+              ),
+            ),
+        ],
+        initialIndex: 0,
+        preload: true,
+      );
+      _adhkarUsesEntrySync = true;
+      _adhkarTrackToEntryIndex = trackToEntryIndex;
+      _adhkarActiveEntryIndex = trackToEntryIndex.first;
+      _loadedAdhkarSignature = signature;
+      return;
+    }
+
+    final categoryUrl = source.url;
+    if (categoryUrl == null || categoryUrl.isEmpty) {
+      return;
+    }
+
+    await _adhkarPlayer.setAudioSource(
+      AudioSource.uri(
+        Uri.parse(categoryUrl),
+        tag: MediaItem(
+          id: '${data.selectedCategory}:category',
+          album: data.selectedCategory,
+          title: source.label,
+          artist: source.voiceDescription.isEmpty
+              ? 'MuslimAI'
+              : source.voiceDescription,
+        ),
+      ),
+      preload: true,
+    );
+    _adhkarUsesEntrySync = false;
+    _adhkarTrackToEntryIndex = const [];
+    _adhkarActiveEntryIndex = 0;
+    _loadedAdhkarSignature = signature;
+  }
+
+  String _buildAdhkarAudioSignature(AdhkarCategoryData categoryData) {
+    final source = categoryData.audioSource;
+    if (source == null) {
+      return '${categoryData.selectedCategory}:silent';
+    }
+
+    if (!source.supportsEntrySync) {
+      return '${categoryData.selectedCategory}:${source.url ?? ''}';
+    }
+
+    final urls = [
+      for (final entry in categoryData.entries) ...entry.audioUrls,
+    ];
+    return '${categoryData.selectedCategory}:${urls.join('|')}';
   }
 
   Future<void> _toggleAdhkarPlayback() async {
@@ -156,6 +261,62 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
 
     await _ensureAdhkarAudioLoaded();
+    await _adhkarPlayer.play();
+  }
+
+  MediaItem _buildAdhkarMediaItem({
+    required int entryIndex,
+    required String url,
+  }) {
+    final data = _adhkarData;
+    final entry = data?.entries[entryIndex];
+    final title = data?.selectedCategory ?? 'Adhkar';
+    return MediaItem(
+      id: '$title:${entryIndex + 1}:$url',
+      album: title,
+      title: 'Dhikr ${entryIndex + 1}',
+      artist: entry?.title ?? title,
+    );
+  }
+
+  Future<void> _seekAdhkarPrevious() async {
+    if (!_adhkarUsesEntrySync || _adhkarTrackToEntryIndex.isEmpty) {
+      return;
+    }
+
+    final targetEntryIndex = _adhkarActiveEntryIndex - 1;
+    if (targetEntryIndex < 0) {
+      return;
+    }
+    await _playAdhkarEntry(targetEntryIndex);
+  }
+
+  Future<void> _seekAdhkarNext() async {
+    final data = _adhkarData;
+    if (!_adhkarUsesEntrySync || data == null) {
+      return;
+    }
+
+    final targetEntryIndex = _adhkarActiveEntryIndex + 1;
+    if (targetEntryIndex >= data.entries.length) {
+      return;
+    }
+    await _playAdhkarEntry(targetEntryIndex);
+  }
+
+  Future<void> _playAdhkarEntry(int entryIndex) async {
+    if (!_adhkarUsesEntrySync || _adhkarData == null) {
+      return;
+    }
+
+    await _ensureAdhkarAudioLoaded();
+    final trackIndex = _adhkarTrackToEntryIndex.indexOf(entryIndex);
+    if (trackIndex < 0) {
+      return;
+    }
+
+    setState(() => _adhkarActiveEntryIndex = entryIndex);
+    await _adhkarPlayer.seek(Duration.zero, index: trackIndex);
     await _adhkarPlayer.play();
   }
 
@@ -178,6 +339,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final adhkarEntries = _adhkarData?.entries ?? const <AdhkarEntry>[];
+    final currentAdhkarEntry =
+        adhkarEntries.isEmpty || _adhkarActiveEntryIndex >= adhkarEntries.length
+        ? null
+        : adhkarEntries[_adhkarActiveEntryIndex];
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -185,7 +351,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         Text('Library', style: textTheme.headlineSmall),
         const SizedBox(height: 8),
         Text(
-          'Hadith stays remote with fallback content. Adhkar and Hisn Muslim are loaded from local snapshots, while verified native-speaker adhkar audio is wired category by category.',
+          'Quran, adhkar, and Hisn al-Muslim content now aim for real recorded Arabic voice wherever a verified source exists. Entry-level sync is used when the source exposes per-item audio.',
           style: textTheme.bodyMedium,
         ),
         const SizedBox(height: 16),
@@ -213,8 +379,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 decoration: const InputDecoration(labelText: 'Category'),
                 items: (_adhkarData?.categories ?? const <String>[])
                     .map(
-                      (item) =>
-                          DropdownMenuItem(value: item, child: Text(item)),
+                      (item) => DropdownMenuItem(
+                        value: item,
+                        child: ArabicText(
+                          item,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      ),
                     )
                     .toList(),
                 onChanged: (value) {
@@ -250,14 +421,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   source: _adhkarAudioSource!,
                   isPlaying: _adhkarAudioPlaying,
                   isLoading: _adhkarAudioLoading,
+                  usesEntrySync: _adhkarUsesEntrySync,
                   onTogglePlayback: _toggleAdhkarPlayback,
+                  onPrevious: _adhkarUsesEntrySync ? _seekAdhkarPrevious : null,
+                  onNext: _adhkarUsesEntrySync ? _seekAdhkarNext : null,
                 )
               else if (_adhkarMode != AdhkarMode.read)
                 const Card(
                   child: Padding(
                     padding: EdgeInsets.all(16),
                     child: Text(
-                      'Recorded audio is currently verified for morning and evening adhkar only. This category remains text-first until a matching audio source is added.',
+                      'This category is text-first right now because no verified recorded Arabic source is attached to it yet.',
                     ),
                   ),
                 ),
@@ -286,32 +460,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           )
         else if (_section == LibrarySection.adhkar)
-          ...(_adhkarMode == AdhkarMode.listen
-              ? <Widget>[
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Text(
-                        _adhkarAudioSource == null
-                            ? 'Listen mode is waiting on a verified recorded source for this category.'
-                            : 'Listen mode is playing the recorded category recitation while keeping the text available when you switch to read + listen.',
-                      ),
-                    ),
-                  ),
-                ]
-              : (_adhkarData?.entries
-                        .map(
-                          (item) => Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _ArabicEntryCard(
-                              title: item.title,
-                              body: item.text,
-                              badge: '${item.repeatCount}x',
-                            ),
-                          ),
-                        )
-                        .toList() ??
-                    const <Widget>[]))
+          ..._buildAdhkarContent(
+            entries: adhkarEntries,
+            currentEntry: currentAdhkarEntry,
+          )
         else
           ...?_hisnData?.entries.map(
             (item) => Padding(
@@ -320,11 +472,70 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 title: _hisnData!.categoryName,
                 body: item.text,
                 badge: '${item.repeatCount}x',
+                reference: item.reference,
               ),
             ),
           ),
       ],
     );
+  }
+
+  List<Widget> _buildAdhkarContent({
+    required List<AdhkarEntry> entries,
+    required AdhkarEntry? currentEntry,
+  }) {
+    if (_adhkarMode == AdhkarMode.listen) {
+      if (_adhkarUsesEntrySync && currentEntry != null) {
+        return [
+          _AdhkarListenOnlyCard(
+            entry: currentEntry,
+            indexLabel:
+                '${_adhkarActiveEntryIndex + 1} of ${entries.length}',
+            isPlaying: _adhkarAudioPlaying,
+            isLoading: _adhkarAudioLoading,
+            onTogglePlayback: _toggleAdhkarPlayback,
+            onPrevious: _adhkarActiveEntryIndex > 0 ? _seekAdhkarPrevious : null,
+            onNext: _adhkarActiveEntryIndex + 1 < entries.length
+                ? _seekAdhkarNext
+                : null,
+          ),
+        ];
+      }
+
+      return [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Text(
+              _adhkarAudioSource == null
+                  ? 'Listen mode is waiting on a verified recorded source for this category.'
+                  : 'Listen mode is using a category-level recorded recitation. Switch to read + listen to keep the text visible while the recording plays.',
+            ),
+          ),
+        ),
+      ];
+    }
+
+    return entries
+        .asMap()
+        .entries
+        .map(
+          (entry) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _ArabicEntryCard(
+              title: entry.value.title,
+              body: entry.value.text,
+              badge: '${entry.value.repeatCount}x',
+              reference: entry.value.reference,
+              isActive:
+                  _adhkarUsesEntrySync && entry.key == _adhkarActiveEntryIndex,
+              onPlay: entry.value.audioUrls.isNotEmpty
+                  ? () => _playAdhkarEntry(entry.key)
+                  : null,
+            ),
+          ),
+        )
+        .toList(growable: false);
   }
 }
 
@@ -333,13 +544,19 @@ class _AdhkarPlayerCard extends StatelessWidget {
     required this.source,
     required this.isPlaying,
     required this.isLoading,
+    required this.usesEntrySync,
     required this.onTogglePlayback,
+    this.onPrevious,
+    this.onNext,
   });
 
   final AdhkarAudioSource source;
   final bool isPlaying;
   final bool isLoading;
+  final bool usesEntrySync;
   final VoidCallback onTogglePlayback;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
 
   @override
   Widget build(BuildContext context) {
@@ -354,26 +571,127 @@ class _AdhkarPlayerCard extends StatelessWidget {
             Text(source.label, style: textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(
-              source.supportsEntrySync
-                  ? 'This source includes entry-level sync support.'
-                  : 'This verified recording is category-level audio. It preserves native Arabic recitation but does not expose entry timestamps.',
+              usesEntrySync
+                  ? 'This category is running on entry-level recorded audio, so the active dhikr can stay synchronized with playback.'
+                  : 'This category is using a real Arabic recording, but the source is one continuous recitation rather than entry-timestamped audio.',
               style: textTheme.bodyMedium,
             ),
+            if (source.voiceDescription.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(source.voiceDescription, style: textTheme.bodySmall),
+            ],
             const SizedBox(height: 16),
-            FilledButton.tonalIcon(
-              onPressed: isLoading ? null : onTogglePlayback,
-              icon: Icon(
-                isPlaying
-                    ? Icons.pause_circle_filled
-                    : Icons.play_circle_fill,
+            Row(
+              children: [
+                IconButton(
+                  onPressed: isLoading ? null : onPrevious,
+                  icon: const Icon(Icons.skip_previous),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: isLoading ? null : onTogglePlayback,
+                  icon: Icon(
+                    isPlaying
+                        ? Icons.pause_circle_filled
+                        : Icons.play_circle_fill,
+                  ),
+                  label: Text(
+                    isLoading
+                        ? 'Loading…'
+                        : isPlaying
+                        ? 'Pause recording'
+                        : 'Play recording',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: isLoading ? null : onNext,
+                  icon: const Icon(Icons.skip_next),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdhkarListenOnlyCard extends StatelessWidget {
+  const _AdhkarListenOnlyCard({
+    required this.entry,
+    required this.indexLabel,
+    required this.isPlaying,
+    required this.isLoading,
+    required this.onTogglePlayback,
+    this.onPrevious,
+    this.onNext,
+  });
+
+  final AdhkarEntry entry;
+  final String indexLabel;
+  final bool isPlaying;
+  final bool isLoading;
+  final VoidCallback onTogglePlayback;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(indexLabel, style: textTheme.titleMedium),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ArabicText(
+                entry.text,
+                style: textTheme.headlineSmall?.copyWith(
+                  height: 1.7,
+                  fontSize: 24,
+                ),
               ),
-              label: Text(
-                isLoading
-                    ? 'Loading…'
-                    : isPlaying
-                    ? 'Pause recording'
-                    : 'Play recording',
+            ),
+            const SizedBox(height: 12),
+            if (entry.reference.isNotEmpty)
+              Align(
+                alignment: Alignment.centerRight,
+                child: ArabicText(
+                  entry.reference,
+                  style: textTheme.bodyMedium,
+                ),
               ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: isLoading ? null : onPrevious,
+                  icon: const Icon(Icons.skip_previous),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: isLoading ? null : onTogglePlayback,
+                  icon: Icon(
+                    isPlaying
+                        ? Icons.pause_circle_filled
+                        : Icons.play_circle_fill,
+                  ),
+                  label: Text(
+                    isLoading ? 'Loading…' : isPlaying ? 'Pause' : 'Play',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: isLoading ? null : onNext,
+                  icon: const Icon(Icons.skip_next),
+                ),
+              ],
             ),
           ],
         ),
@@ -416,11 +734,17 @@ class _ArabicEntryCard extends StatelessWidget {
     required this.title,
     required this.body,
     required this.badge,
+    required this.reference,
+    this.isActive = false,
+    this.onPlay,
   });
 
   final String title;
   final String body;
   final String badge;
+  final String reference;
+  final bool isActive;
+  final VoidCallback? onPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -428,14 +752,27 @@ class _ArabicEntryCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Card(
+      color: isActive
+          ? scheme.primaryContainer.withValues(alpha: 0.7)
+          : null,
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              textDirection: TextDirection.rtl,
               children: [
-                Expanded(child: Text(title, style: textTheme.titleMedium)),
+                Expanded(
+                  child: ArabicText(title, style: textTheme.titleMedium),
+                ),
+                if (onPlay != null) ...[
+                  IconButton(
+                    onPressed: onPlay,
+                    icon: const Icon(Icons.play_circle_fill),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -450,17 +787,23 @@ class _ArabicEntryCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            Directionality(
-              textDirection: TextDirection.rtl,
-              child: Text(
+            Align(
+              alignment: Alignment.centerRight,
+              child: ArabicText(
                 body,
-                textAlign: TextAlign.right,
                 style: textTheme.headlineSmall?.copyWith(
                   height: 1.65,
                   fontSize: 22,
                 ),
               ),
             ),
+            if (reference.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ArabicText(reference, style: textTheme.bodyMedium),
+              ),
+            ],
           ],
         ),
       ),
