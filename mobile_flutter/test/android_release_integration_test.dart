@@ -25,4 +25,29 @@ void main() {
 
     expect(qibla.direction, closeTo(266.44, 0.2));
   });
+
+  test('library playback uses the shared app audio player', () {
+    final libraryScreen = File(
+      'lib/src/screens/library_screen.dart',
+    ).readAsStringSync();
+    final quranController = File(
+      'lib/src/services/quran_audio_controller.dart',
+    ).readAsStringSync();
+
+    expect(
+      libraryScreen.contains('final _adhkarPlayer = AudioPlayer();'),
+      isFalse,
+      reason: 'Library playback must not create a second background player instance.',
+    );
+    expect(
+      libraryScreen.contains('SharedAudioPlayer.instance'),
+      isTrue,
+      reason: 'Library playback should reuse the app-wide shared player.',
+    );
+    expect(
+      quranController.contains('SharedAudioPlayer.instance'),
+      isTrue,
+      reason: 'Quran playback should also use the shared player path.',
+    );
+  });
 }

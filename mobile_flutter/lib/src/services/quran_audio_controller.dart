@@ -6,13 +6,14 @@ import 'package:just_audio/just_audio.dart';
 
 import '../models/quran_models.dart';
 import 'app_preferences_service.dart';
+import 'shared_audio_player.dart';
 
 class QuranAudioController extends ChangeNotifier {
   QuranAudioController._();
 
   static final QuranAudioController instance = QuranAudioController._();
 
-  final AudioPlayer _player = AudioPlayer();
+  final SharedAudioPlayer _sharedAudio = SharedAudioPlayer.instance;
   final AppPreferencesService _preferences = AppPreferencesService.instance;
 
   SurahSummary? _surah;
@@ -35,6 +36,7 @@ class QuranAudioController extends ChangeNotifier {
   bool get hasPlaylist => _surah != null && _ayahs.isNotEmpty;
   AyahRow? get currentAyah =>
       _ayahs.isEmpty || _activeIndex >= _ayahs.length ? null : _ayahs[_activeIndex];
+  AudioPlayer get _player => _sharedAudio.player;
 
   Future<void> initialize() async {
     if (_initialized) {
@@ -72,6 +74,7 @@ class QuranAudioController extends ChangeNotifier {
     bool autoplay = false,
   }) async {
     await initialize();
+    await _sharedAudio.claim(SharedAudioOwner.quran);
 
     final safeIndex = ayahs.isEmpty
         ? 0
@@ -156,7 +159,28 @@ class QuranAudioController extends ChangeNotifier {
   }
 
   Future<void> stop() async {
-    await _player.stop();
+    await _sharedAudio.release(SharedAudioOwner.quran);
+    _isPlaying = false;
+    notifyListeners();
+  }
+
+  Future<void> clearSessionForExternalPlayback() async {
+    if (!hasPlaylist && _sharedAudio.owner != SharedAudioOwner.quran) {
+      return;
+    }
+
+    if (_sharedAudio.owner == SharedAudioOwner.quran) {
+      await _sharedAudio.release(SharedAudioOwner.quran);
+    }
+
+    _surah = null;
+    _ayahs = const [];
+    _activeIndex = 0;
+    _readerId = '';
+    _readerLabel = '';
+    _translationId = '';
+    _mode = 'read_listen';
+    _isLoading = false;
     _isPlaying = false;
     notifyListeners();
   }

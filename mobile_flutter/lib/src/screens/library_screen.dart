@@ -7,6 +7,8 @@ import 'package:just_audio/just_audio.dart';
 import '../models/library_models.dart';
 import '../screenshot_scene.dart';
 import '../services/library_service.dart';
+import '../services/quran_audio_controller.dart';
+import '../services/shared_audio_player.dart';
 import '../widgets/arabic_text.dart';
 
 enum LibrarySection { hadith, adhkar, hisn }
@@ -22,7 +24,8 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen> {
   final _service = LibraryService();
-  final _adhkarPlayer = AudioPlayer();
+  final _sharedAudio = SharedAudioPlayer.instance;
+  final _quranAudioController = QuranAudioController.instance;
 
   LibrarySection _section = AppScreenshotScene.librarySection == 'adhkar'
       ? LibrarySection.adhkar
@@ -49,6 +52,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   AdhkarAudioSource? _adhkarAudioSource;
   StreamSubscription<PlayerState>? _adhkarPlayerStateSubscription;
   StreamSubscription<int?>? _adhkarCurrentIndexSubscription;
+
+  AudioPlayer get _adhkarPlayer => _sharedAudio.player;
 
   @override
   void initState() {
@@ -84,7 +89,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void dispose() {
     _adhkarPlayerStateSubscription?.cancel();
     _adhkarCurrentIndexSubscription?.cancel();
-    _adhkarPlayer.dispose();
+    unawaited(_sharedAudio.release(SharedAudioOwner.library));
     super.dispose();
   }
 
@@ -96,7 +101,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     try {
       if (_section == LibrarySection.hadith) {
-        await _adhkarPlayer.stop();
+        await _sharedAudio.release(SharedAudioOwner.library);
         final hadith = await _service.fetchHadithPage();
         if (!mounted) {
           return;
@@ -194,7 +199,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
       return;
     }
 
-    await _adhkarPlayer.stop();
+    if (_sharedAudio.owner == SharedAudioOwner.library) {
+      await _adhkarPlayer.stop();
+    }
     _loadedAdhkarSignature = '';
     _adhkarTrackToEntryIndex = const [];
     _adhkarUsesEntrySync = false;
@@ -216,6 +223,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
     if (_loadedAdhkarSignature == signature) {
       return;
     }
+
+    await _quranAudioController.clearSessionForExternalPlayback();
+    await _sharedAudio.claim(SharedAudioOwner.library);
 
     if (source.supportsEntrySync) {
       final trackUrls = <String>[];
