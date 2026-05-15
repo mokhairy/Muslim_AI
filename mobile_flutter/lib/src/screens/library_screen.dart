@@ -5,12 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../models/library_models.dart';
+import '../models/prayer_models.dart';
 import '../screenshot_scene.dart';
+import '../services/app_preferences_service.dart';
 import '../services/library_service.dart';
 import '../services/offline_cache_service.dart';
+import '../services/prayer_audio_routing_service.dart';
 import '../services/quran_audio_controller.dart';
 import '../services/shared_audio_player.dart';
 import '../widgets/arabic_text.dart';
+import '../widgets/audio_output_routing_card.dart';
 
 enum LibrarySection { hadith, adhkar, hisn }
 
@@ -25,9 +29,11 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen> {
   final _service = LibraryService();
+  final _preferences = AppPreferencesService.instance;
   final _sharedAudio = SharedAudioPlayer.instance;
   final _quranAudioController = QuranAudioController.instance;
   final _offlineCache = OfflineCacheService.instance;
+  final _audioRouting = AudioOutputRoutingService(owner: SharedAudioOwner.library);
 
   LibrarySection _section = AppScreenshotScene.librarySection == 'adhkar'
       ? LibrarySection.adhkar
@@ -47,6 +53,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   bool _downloadBusy = false;
   int _adhkarActiveEntryIndex = 0;
   int _downloadedAudioCount = 0;
+  SpeakerRouteMode _speakerRouteMode = SpeakerRouteMode.mobileOnly;
+  Set<String> _selectedSpeakerIds = <String>{};
   String _error = '';
   String _loadedAdhkarSignature = '';
   List<HadithItem> _hadithItems = const [];
@@ -64,6 +72,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   void initState() {
     super.initState();
+    _audioRouting.addListener(_handleAudioRoutingChanged);
     _adhkarPlayerStateSubscription = _adhkarPlayer.playerStateStream.listen((
       state,
     ) {
@@ -93,10 +102,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   void dispose() {
+    _audioRouting.removeListener(_handleAudioRoutingChanged);
     _adhkarPlayerStateSubscription?.cancel();
     _adhkarCurrentIndexSubscription?.cancel();
+    unawaited(_audioRouting.shutdown());
     unawaited(_sharedAudio.release(SharedAudioOwner.library));
     super.dispose();
+  }
+
+  void _handleAudioRoutingChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
   }
 
   Future<void> _load() async {
@@ -106,6 +124,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
     });
 
     try {
+      final savedRouting = await _preferences.loadAudioOutputRouting(
+        scope: 'library',
+        defaultMode: SpeakerRouteMode.mobileOnly,
+      );
+      _speakerRouteMode = savedRouting.mode;
+      _selectedSpeakerIds = savedRouting.selectedDeviceIds;
+
       if (_section == LibrarySection.hadith) {
         await _sharedAudio.release(SharedAudioOwner.library);
         final hadith = await _service.fetchHadithPage();
@@ -407,6 +432,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
       return;
     }
 
+    if (_speakerRouteMode != SpeakerRouteMode.mobileOnly) {
+      if (_audioRouting.hasRemotePlayback) {
+        await _audioRouting.stopAllPlayback();
+        return;
+      }
+      await _broadcastLibrarySelection();
+      return;
+    }
+
     if (_adhkarPlayer.playing) {
       await _adhkarPlayer.pause();
       return;
@@ -440,6 +474,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     if (targetEntryIndex < 0) {
       return;
     }
+    if (_speakerRouteMode != SpeakerRouteMode.mobileOnly) {
+      await _broadcastLibrarySelection(entryIndex: targetEntryIndex);
+      return;
+    }
     await _playAdhkarEntry(targetEntryIndex);
   }
 
@@ -451,6 +489,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     final targetEntryIndex = _adhkarActiveEntryIndex + 1;
     if (targetEntryIndex >= entries.length) {
+      return;
+    }
+    if (_speakerRouteMode != SpeakerRouteMode.mobileOnly) {
+      await _broadcastLibrarySelection(entryIndex: targetEntryIndex);
       return;
     }
     await _playAdhkarEntry(targetEntryIndex);
@@ -468,6 +510,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
 
     setState(() => _adhkarActiveEntryIndex = entryIndex);
+    if (_speakerRouteMode != SpeakerRouteMode.mobileOnly) {
+      await _broadcastLibrarySelection(entryIndex: entryIndex);
+      return;
+    }
     await _adhkarPlayer.seek(Duration.zero, index: trackIndex);
     await _adhkarPlayer.play();
   }
@@ -484,8 +530,123 @@ class _LibraryScreenState extends State<LibraryScreen> {
       return;
     }
 
+    if (mode != AdhkarMode.read && _speakerRouteMode != SpeakerRouteMode.mobileOnly) {
+      await _broadcastLibrarySelection();
+      return;
+    }
+
     await _ensureAdhkarAudioLoaded();
     await _adhkarPlayer.play();
+  }
+
+  Future<void> _persistAudioRouting() {
+    return _preferences.saveAudioOutputRouting(
+      scope: 'library',
+      mode: _speakerRouteMode,
+      selectedDeviceIds: _selectedSpeakerIds,
+    );
+  }
+
+  PrayerAudioOption? _libraryAudioOption({int? entryIndex}) {
+    final source = _activeAudioSource;
+    if (source == null) {
+      return null;
+    }
+
+    if (!source.supportsEntrySync) {
+      final url = source.url;
+      if (url == null || url.isEmpty) {
+        return null;
+      }
+      return PrayerAudioOption(
+        id: 'library:${_section.name}:$_activeCollectionTitle',
+        category: _section == LibrarySection.hisn ? 'Hisn Muslim' : 'Adhkar',
+        label: source.label,
+        description: source.voiceDescription,
+        audioUrl: url,
+        mediaType: 'mp3',
+      );
+    }
+
+    final entries = _activeEntries;
+    final safeIndex = entryIndex ?? _adhkarActiveEntryIndex;
+    if (safeIndex < 0 || safeIndex >= entries.length) {
+      return null;
+    }
+    final entry = entries[safeIndex];
+    String? url;
+    for (final item in entry.audioUrls) {
+      if (item.isNotEmpty) {
+        url = item;
+        break;
+      }
+    }
+    if (url == null) return null;
+    return PrayerAudioOption(
+      id: 'library:${_section.name}:${safeIndex + 1}',
+      category: _section == LibrarySection.hisn ? 'Hisn Muslim' : 'Adhkar',
+      label: entry.title,
+      description: source.voiceDescription,
+      audioUrl: url,
+      mediaType: 'mp3',
+    );
+  }
+
+  Future<void> _broadcastLibrarySelection({int? entryIndex}) async {
+    final option = _libraryAudioOption(entryIndex: entryIndex);
+    if (option == null) {
+      return;
+    }
+    if (entryIndex != null) {
+      setState(() => _adhkarActiveEntryIndex = entryIndex);
+    }
+    await _persistAudioRouting();
+    await _adhkarPlayer.pause();
+    await _audioRouting.broadcast(
+      option: option,
+      mode: _speakerRouteMode,
+      selectedDeviceIds: _selectedSpeakerIds,
+    );
+  }
+
+  Future<void> _playCurrentLibrarySelection() async {
+    if (_speakerRouteMode != SpeakerRouteMode.mobileOnly) {
+      await _broadcastLibrarySelection();
+      return;
+    }
+    if (_activeAudioSource == null) {
+      return;
+    }
+    await _ensureAdhkarAudioLoaded();
+    if (_adhkarUsesEntrySync) {
+      await _playAdhkarEntry(_adhkarActiveEntryIndex);
+      return;
+    }
+    await _adhkarPlayer.play();
+  }
+
+  Future<void> _updateAudioRouteMode(SpeakerRouteMode mode) async {
+    setState(() => _speakerRouteMode = mode);
+    if (mode != SpeakerRouteMode.mobileOnly && _adhkarPlayer.playing) {
+      await _adhkarPlayer.pause();
+    }
+    await _persistAudioRouting();
+  }
+
+  Future<void> _toggleSpeakerSelection(String deviceId, bool selected) async {
+    setState(() {
+      if (selected) {
+        _selectedSpeakerIds = {..._selectedSpeakerIds, deviceId};
+      } else {
+        _selectedSpeakerIds = {..._selectedSpeakerIds}..remove(deviceId);
+      }
+    });
+    await _persistAudioRouting();
+  }
+
+  Future<void> _stopLibraryAudioOutput() async {
+    await _audioRouting.stopAllPlayback();
+    await _adhkarPlayer.pause();
   }
 
   @override
@@ -569,6 +730,39 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 onSelectionChanged: (value) => _setAdhkarMode(value.first),
               ),
               const SizedBox(height: 12),
+              if (_adhkarAudioSource != null) ...[
+                AudioOutputRoutingCard(
+                  title: 'Speaker Output',
+                  description:
+                      'Save an Adhkar-specific output preset. Keep playback on this phone, or broadcast the current category or active dhikr to selected LAN speakers.',
+                  routeMode: _speakerRouteMode,
+                  selectedSpeakerIds: _selectedSpeakerIds,
+                  discoveredDevices: _audioRouting.devices,
+                  isDiscovering: _audioRouting.isDiscovering,
+                  isBusy: _audioRouting.isBusy,
+                  statusMessage: _audioRouting.statusMessage,
+                  errorMessage: _audioRouting.errorMessage,
+                  isPhonePlaybackActive:
+                      _adhkarAudioPlaying || _audioRouting.isPhonePlaybackActive,
+                  hasRemotePlayback: _audioRouting.hasRemotePlayback,
+                  onScanPressed: _audioRouting.isDiscovering
+                      ? _audioRouting.stopDiscovery
+                      : _audioRouting.startDiscovery,
+                  onPlayPressed: _playCurrentLibrarySelection,
+                  onStopPressed: _stopLibraryAudioOutput,
+                  onRouteModeChanged: _updateAudioRouteMode,
+                  onSpeakerSelectionChanged: _toggleSpeakerSelection,
+                  settings: Text(
+                    _adhkarUsesEntrySync && currentAdhkarEntry != null
+                        ? 'Current selection: ${currentAdhkarEntry.title}'
+                        : 'Current selection: ${_adhkarAudioSource!.label}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  playButtonLabel: 'Broadcast current adhkar',
+                  mobilePlayButtonLabel: 'Play current adhkar',
+                ),
+                const SizedBox(height: 12),
+              ],
               if (_adhkarAudioSource != null && _adhkarMode != AdhkarMode.read)
                 _AdhkarPlayerCard(
                   source: _adhkarAudioSource!,
@@ -625,6 +819,39 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 onSelectionChanged: (value) => _setAdhkarMode(value.first),
               ),
               const SizedBox(height: 12),
+              if (_activeAudioSource != null) ...[
+                AudioOutputRoutingCard(
+                  title: 'Speaker Output',
+                  description:
+                      'Save a Hisn Muslim output preset. Keep playback on this phone, or broadcast the current entry to selected LAN speakers.',
+                  routeMode: _speakerRouteMode,
+                  selectedSpeakerIds: _selectedSpeakerIds,
+                  discoveredDevices: _audioRouting.devices,
+                  isDiscovering: _audioRouting.isDiscovering,
+                  isBusy: _audioRouting.isBusy,
+                  statusMessage: _audioRouting.statusMessage,
+                  errorMessage: _audioRouting.errorMessage,
+                  isPhonePlaybackActive:
+                      _adhkarAudioPlaying || _audioRouting.isPhonePlaybackActive,
+                  hasRemotePlayback: _audioRouting.hasRemotePlayback,
+                  onScanPressed: _audioRouting.isDiscovering
+                      ? _audioRouting.stopDiscovery
+                      : _audioRouting.startDiscovery,
+                  onPlayPressed: _playCurrentLibrarySelection,
+                  onStopPressed: _stopLibraryAudioOutput,
+                  onRouteModeChanged: _updateAudioRouteMode,
+                  onSpeakerSelectionChanged: _toggleSpeakerSelection,
+                  settings: Text(
+                    _adhkarUsesEntrySync && currentAdhkarEntry != null
+                        ? 'Current selection: ${currentAdhkarEntry.title}'
+                        : 'Current selection: ${_activeAudioSource!.label}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  playButtonLabel: 'Broadcast current entry',
+                  mobilePlayButtonLabel: 'Play current entry',
+                ),
+                const SizedBox(height: 12),
+              ],
               if (_activeAudioSource != null && _adhkarMode != AdhkarMode.read)
                 _AdhkarPlayerCard(
                   source: _activeAudioSource!,

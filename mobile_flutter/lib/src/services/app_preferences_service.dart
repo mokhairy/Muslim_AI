@@ -41,9 +41,9 @@ class AppPreferencesService {
   static const _prayerLatitudeKey = 'prayer.latitude';
   static const _prayerLongitudeKey = 'prayer.longitude';
   static const _prayerFromDeviceKey = 'prayer.from_device';
-  static const _speakerRouteModeKey = 'prayer.speaker_route_mode';
-  static const _speakerAudioOptionKey = 'prayer.speaker_audio_option';
-  static const _speakerDeviceIdsKey = 'prayer.speaker_device_ids';
+  static const _audioRouteModePrefix = 'audio_route.mode.';
+  static const _audioRouteDeviceIdsPrefix = 'audio_route.device_ids.';
+  static const _prayerSpeakerAudioOptionKey = 'prayer.speaker_audio_option';
 
   static const _quranSurahKey = 'quran.surah';
   static const _quranTranslationKey = 'quran.translation';
@@ -89,12 +89,12 @@ class AppPreferencesService {
     required Set<String> selectedDeviceIds,
   }) async {
     final prefs = await _prefs();
-    await prefs.setString(_speakerRouteModeKey, mode.name);
-    await prefs.setString(_speakerAudioOptionKey, audioOptionId);
-    await prefs.setStringList(
-      _speakerDeviceIdsKey,
-      selectedDeviceIds.toList(growable: false),
+    await saveAudioOutputRouting(
+      scope: 'prayer',
+      mode: mode,
+      selectedDeviceIds: selectedDeviceIds,
     );
+    await prefs.setString(_prayerSpeakerAudioOptionKey, audioOptionId);
   }
 
   Future<SpeakerRouteSnapshot> loadSpeakerRouting({
@@ -102,7 +102,37 @@ class AppPreferencesService {
     required String defaultAudioOptionId,
   }) async {
     final prefs = await _prefs();
-    final modeName = prefs.getString(_speakerRouteModeKey);
+    final routing = await loadAudioOutputRouting(
+      scope: 'prayer',
+      defaultMode: defaultMode,
+    );
+    return SpeakerRouteSnapshot(
+      mode: routing.mode,
+      audioOptionId:
+          prefs.getString(_prayerSpeakerAudioOptionKey) ?? defaultAudioOptionId,
+      selectedDeviceIds: routing.selectedDeviceIds,
+    );
+  }
+
+  Future<void> saveAudioOutputRouting({
+    required String scope,
+    required SpeakerRouteMode mode,
+    required Set<String> selectedDeviceIds,
+  }) async {
+    final prefs = await _prefs();
+    await prefs.setString('$_audioRouteModePrefix$scope', mode.name);
+    await prefs.setStringList(
+      '$_audioRouteDeviceIdsPrefix$scope',
+      selectedDeviceIds.toList(growable: false),
+    );
+  }
+
+  Future<SpeakerOutputRoutingSnapshot> loadAudioOutputRouting({
+    required String scope,
+    required SpeakerRouteMode defaultMode,
+  }) async {
+    final prefs = await _prefs();
+    final modeName = prefs.getString('$_audioRouteModePrefix$scope');
     SpeakerRouteMode? mode;
     for (final item in SpeakerRouteMode.values) {
       if (item.name == modeName) {
@@ -110,12 +140,11 @@ class AppPreferencesService {
         break;
       }
     }
-    return SpeakerRouteSnapshot(
+    return SpeakerOutputRoutingSnapshot(
       mode: mode ?? defaultMode,
-      audioOptionId:
-          prefs.getString(_speakerAudioOptionKey) ?? defaultAudioOptionId,
       selectedDeviceIds:
-          prefs.getStringList(_speakerDeviceIdsKey)?.toSet() ?? <String>{},
+          prefs.getStringList('$_audioRouteDeviceIdsPrefix$scope')?.toSet() ??
+          <String>{},
     );
   }
 

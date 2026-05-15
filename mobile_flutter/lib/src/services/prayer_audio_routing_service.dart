@@ -10,16 +10,17 @@ import '../models/prayer_models.dart';
 import 'offline_cache_service.dart';
 import 'shared_audio_player.dart';
 
-class PrayerAudioRoutingService extends ChangeNotifier {
-  PrayerAudioRoutingService()
-    : _castService = CastService(
+class AudioOutputRoutingService extends ChangeNotifier {
+  AudioOutputRoutingService({required SharedAudioOwner owner})
+    : _owner = owner,
+      _castService = CastService(
         discoveryProviders: [
           ChromecastDiscoveryProvider(),
           DlnaDiscoveryProvider(),
         ],
       ) {
     _playerStateSubscription = _sharedAudio.player.playerStateStream.listen((_) {
-      if (_sharedAudio.owner == SharedAudioOwner.prayer) {
+      if (_sharedAudio.owner == _owner) {
         notifyListeners();
       }
     });
@@ -68,6 +69,7 @@ class PrayerAudioRoutingService extends ChangeNotifier {
     ),
   ];
 
+  final SharedAudioOwner _owner;
   final CastService _castService;
   final SharedAudioPlayer _sharedAudio = SharedAudioPlayer.instance;
   final OfflineCacheService _offlineCache = OfflineCacheService.instance;
@@ -89,7 +91,7 @@ class PrayerAudioRoutingService extends ChangeNotifier {
   String get statusMessage => _statusMessage;
   String get errorMessage => _errorMessage;
   bool get isPhonePlaybackActive =>
-      _sharedAudio.owner == SharedAudioOwner.prayer &&
+      _sharedAudio.owner == _owner &&
       _sharedAudio.player.playing &&
       _activeSessions.isEmpty;
   bool get hasRemotePlayback => _activeSessions.isNotEmpty;
@@ -183,7 +185,7 @@ class PrayerAudioRoutingService extends ChangeNotifier {
   Future<void> playOnPhone(PrayerAudioOption option) async {
     await _runWithBusyState(() async {
       await _stopRemoteSessions();
-      await _sharedAudio.claim(SharedAudioOwner.prayer);
+      await _sharedAudio.claim(_owner);
 
       final audioUri = await _offlineCache.resolvePlayableAudioUri(option.audioUrl);
       await _sharedAudio.player.setAudioSource(
@@ -220,7 +222,7 @@ class PrayerAudioRoutingService extends ChangeNotifier {
         );
       }
 
-      await _sharedAudio.claim(SharedAudioOwner.prayer);
+      await _sharedAudio.claim(_owner);
       await _sharedAudio.player.stop();
       await _stopRemoteSessions();
 
@@ -261,11 +263,12 @@ class PrayerAudioRoutingService extends ChangeNotifier {
   Future<void> stopAllPlayback() async {
     await _runWithBusyState(() async {
       await _stopRemoteSessions();
-      if (_sharedAudio.owner == SharedAudioOwner.prayer) {
-        await _sharedAudio.release(SharedAudioOwner.prayer);
+      if (_sharedAudio.owner == _owner) {
+        await _sharedAudio.release(_owner);
       }
       _activeAudioOptionId = null;
-      _statusMessage = 'Prayer tab playback stopped.';
+      _lastBroadcastDeviceIds = <String>{};
+      _statusMessage = 'Playback stopped.';
       _errorMessage = '';
     });
   }
@@ -274,8 +277,8 @@ class PrayerAudioRoutingService extends ChangeNotifier {
     await stopDiscovery();
     await _stopRemoteSessions();
     await _playerStateSubscription.cancel();
-    if (_sharedAudio.owner == SharedAudioOwner.prayer) {
-      await _sharedAudio.release(SharedAudioOwner.prayer);
+    if (_sharedAudio.owner == _owner) {
+      await _sharedAudio.release(_owner);
     }
     await _castService.dispose();
   }
@@ -381,3 +384,5 @@ class PrayerAudioRoutingService extends ChangeNotifier {
     }
   }
 }
+
+typedef PrayerAudioRoutingService = AudioOutputRoutingService;

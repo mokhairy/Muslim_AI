@@ -1,12 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../models/prayer_models.dart';
 import '../screenshot_scene.dart';
 import '../models/quran_models.dart';
 import '../services/app_preferences_service.dart';
 import '../services/offline_cache_service.dart';
+import '../services/prayer_audio_routing_service.dart';
 import '../services/quran_audio_controller.dart';
 import '../services/quran_service.dart';
+import '../services/shared_audio_player.dart';
 import '../widgets/arabic_text.dart';
+import '../widgets/audio_output_routing_card.dart';
 
 enum QuranMode { read, listen, readListen }
 
@@ -44,6 +50,7 @@ class _QuranScreenState extends State<QuranScreen> {
   final _preferences = AppPreferencesService.instance;
   final _audioController = QuranAudioController.instance;
   final _offlineCache = OfflineCacheService.instance;
+  final _audioRouting = AudioOutputRoutingService(owner: SharedAudioOwner.quran);
 
   List<SurahSummary> _surahs = const [];
   SurahDetail? _detail;
@@ -56,22 +63,34 @@ class _QuranScreenState extends State<QuranScreen> {
   bool _loading = true;
   bool _downloadBusy = false;
   int _downloadedAyahAudioCount = 0;
+  SpeakerRouteMode _speakerRouteMode = SpeakerRouteMode.mobileOnly;
+  Set<String> _selectedSpeakerIds = <String>{};
   String _error = '';
 
   @override
   void initState() {
     super.initState();
     _audioController.addListener(_onAudioStateChanged);
+    _audioRouting.addListener(_onAudioRoutingChanged);
     _bootstrap();
   }
 
   @override
   void dispose() {
     _audioController.removeListener(_onAudioStateChanged);
+    _audioRouting.removeListener(_onAudioRoutingChanged);
+    unawaited(_audioRouting.shutdown());
     super.dispose();
   }
 
   void _onAudioStateChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+  }
+
+  void _onAudioRoutingChanged() {
     if (!mounted) {
       return;
     }
@@ -102,6 +121,10 @@ class _QuranScreenState extends State<QuranScreen> {
               bookmarkedVerses: const {'2:2', '2:3', '2:5'},
             );
 
+      final savedRouting = await _preferences.loadAudioOutputRouting(
+        scope: 'quran',
+        defaultMode: SpeakerRouteMode.mobileOnly,
+      );
       final surahs = await _service.fetchSurahList();
       final detail = await _service.fetchSurahDetail(
         surahNumber: session.surahNumber,
@@ -122,6 +145,8 @@ class _QuranScreenState extends State<QuranScreen> {
         _mode = _quranModeFromValue(session.mode);
         _bookmarks = session.bookmarkedVerses;
         _initialAyahIndex = session.activeAyahIndex;
+        _speakerRouteMode = savedRouting.mode;
+        _selectedSpeakerIds = savedRouting.selectedDeviceIds;
         _loading = false;
       });
 
@@ -213,7 +238,12 @@ class _QuranScreenState extends State<QuranScreen> {
       return;
     }
 
-    await _audioController.playFromIndex(_audioController.activeIndex);
+    if (_speakerRouteMode == SpeakerRouteMode.mobileOnly) {
+      await _audioController.playFromIndex(_audioController.activeIndex);
+      return;
+    }
+
+    await _broadcastAyahAtIndex(_audioController.activeIndex);
   }
 
   Future<void> _toggleBookmark(String verseKey) async {
@@ -329,13 +359,13 @@ class _QuranScreenState extends State<QuranScreen> {
         ),
         const SizedBox(height: 16),
         if (_detail != null)
-          _ResumeCard(
+            _ResumeCard(
             activeAyahIndex: activeIndex,
             totalAyahs: ayahs.length,
             bookmarkCount: _bookmarks.length,
             onResume: ayahs.isEmpty
                 ? null
-                : () => _audioController.playFromIndex(activeIndex),
+                : () => _playAyah(activeIndex),
           ),
         if (_detail != null) const SizedBox(height: 12),
         Card(
@@ -433,6 +463,39 @@ class _QuranScreenState extends State<QuranScreen> {
                   onSelectionChanged: (value) => _setMode(value.first),
                 ),
                 const SizedBox(height: 16),
+                AudioOutputRoutingCard(
+                  title: 'Speaker Output',
+                  description:
+                      'Save a Quran-specific output preset. Keep recitation on this phone, or scan the local network and broadcast the current ayah to selected smart speakers.',
+                  routeMode: _speakerRouteMode,
+                  selectedSpeakerIds: _selectedSpeakerIds,
+                  discoveredDevices: _audioRouting.devices,
+                  isDiscovering: _audioRouting.isDiscovering,
+                  isBusy: _audioRouting.isBusy,
+                  statusMessage: _audioRouting.statusMessage,
+                  errorMessage: _audioRouting.errorMessage,
+                  isPhonePlaybackActive:
+                      _audioController.isPlaying || _audioRouting.isPhonePlaybackActive,
+                  hasRemotePlayback: _audioRouting.hasRemotePlayback,
+                  onScanPressed: _audioRouting.isDiscovering
+                      ? _audioRouting.stopDiscovery
+                      : _audioRouting.startDiscovery,
+                  onPlayPressed: ayahs.isEmpty
+                      ? () async {}
+                      : () => _playAyah(activeIndex),
+                  onStopPressed: _stopAudioOutput,
+                  onRouteModeChanged: _updateAudioRouteMode,
+                  onSpeakerSelectionChanged: _toggleSpeakerSelection,
+                  settings: Text(
+                    activeAyah == null
+                        ? 'Select a surah to enable remote playback.'
+                        : 'Current selection: ${_detail?.surah?.englishName ?? 'Surah'} · Ayah ${activeAyah.numberInSurah} · ${_readerLabelFor(_reader)}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  playButtonLabel: 'Broadcast current ayah',
+                  mobilePlayButtonLabel: 'Play current ayah',
+                ),
+                const SizedBox(height: 16),
                 _OfflineQuranAudioCard(
                   downloadedCount: _downloadedAyahAudioCount,
                   totalCount: ayahs.where((ayah) => ayah.audioUrl.isNotEmpty).length,
@@ -469,12 +532,14 @@ class _QuranScreenState extends State<QuranScreen> {
               ayah: activeAyah,
               currentIndex: activeIndex,
               totalAyahs: ayahs.length,
-              isPlaying: _audioController.isPlaying,
+              isPlaying: _speakerRouteMode == SpeakerRouteMode.mobileOnly
+                  ? _audioController.isPlaying
+                  : _audioRouting.hasRemotePlayback,
               audioLoading: _audioController.isLoading,
-              onTogglePlayback: _audioController.togglePlayback,
-              onStepBack: activeIndex > 0 ? _audioController.seekPrevious : null,
+              onTogglePlayback: _toggleQuranPlayback,
+              onStepBack: activeIndex > 0 ? _seekPreviousQuran : null,
               onStepForward:
-                  activeIndex + 1 < ayahs.length ? _audioController.seekNext : null,
+                  activeIndex + 1 < ayahs.length ? _seekNextQuran : null,
             )
           else
             ...ayahs.asMap().entries.map((entry) {
@@ -490,13 +555,124 @@ class _QuranScreenState extends State<QuranScreen> {
                   onBookmark: () => _toggleBookmark(ayah.verseKey),
                   onPlay: ayah.audioUrl.isEmpty
                       ? null
-                      : () => _audioController.playFromIndex(index),
+                      : () => _playAyah(index),
                 ),
               );
             }),
         ],
       ],
     );
+  }
+
+  Future<void> _persistAudioRouting() {
+    return _preferences.saveAudioOutputRouting(
+      scope: 'quran',
+      mode: _speakerRouteMode,
+      selectedDeviceIds: _selectedSpeakerIds,
+    );
+  }
+
+  PrayerAudioOption? _optionForAyah(int index) {
+    final surah = _detail?.surah;
+    final ayahs = _detail?.ayahs;
+    if (surah == null || ayahs == null || index < 0 || index >= ayahs.length) {
+      return null;
+    }
+    final ayah = ayahs[index];
+    if (ayah.audioUrl.isEmpty) {
+      return null;
+    }
+    return PrayerAudioOption(
+      id: 'quran:${surah.number}:${ayah.numberInSurah}:$_reader',
+      category: 'Quran',
+      label: '${surah.englishName} · Ayah ${ayah.numberInSurah}',
+      description: 'Recorded Quran recitation by ${_readerLabelFor(_reader)}.',
+      audioUrl: ayah.audioUrl,
+      mediaType: 'mp3',
+    );
+  }
+
+  Future<void> _playAyah(int index) async {
+    if (_speakerRouteMode == SpeakerRouteMode.mobileOnly) {
+      await _audioController.playFromIndex(index);
+      return;
+    }
+    await _broadcastAyahAtIndex(index);
+  }
+
+  Future<void> _broadcastAyahAtIndex(int index) async {
+    final option = _optionForAyah(index);
+    if (option == null) {
+      return;
+    }
+    await _persistAudioRouting();
+    await _audioController.setExternalActiveIndex(index);
+    await _audioRouting.broadcast(
+      option: option,
+      mode: _speakerRouteMode,
+      selectedDeviceIds: _selectedSpeakerIds,
+    );
+  }
+
+  Future<void> _toggleQuranPlayback() async {
+    if (_speakerRouteMode == SpeakerRouteMode.mobileOnly) {
+      await _audioController.togglePlayback();
+      return;
+    }
+    if (_audioRouting.hasRemotePlayback) {
+      await _audioRouting.stopAllPlayback();
+      return;
+    }
+    await _broadcastAyahAtIndex(_audioController.activeIndex);
+  }
+
+  Future<void> _seekPreviousQuran() async {
+    final targetIndex = _audioController.activeIndex - 1;
+    if (targetIndex < 0) {
+      return;
+    }
+    if (_speakerRouteMode == SpeakerRouteMode.mobileOnly) {
+      await _audioController.seekPrevious();
+      return;
+    }
+    await _broadcastAyahAtIndex(targetIndex);
+  }
+
+  Future<void> _seekNextQuran() async {
+    final targetIndex = _audioController.activeIndex + 1;
+    final ayahs = _detail?.ayahs ?? const <AyahRow>[];
+    if (targetIndex >= ayahs.length) {
+      return;
+    }
+    if (_speakerRouteMode == SpeakerRouteMode.mobileOnly) {
+      await _audioController.seekNext();
+      return;
+    }
+    await _broadcastAyahAtIndex(targetIndex);
+  }
+
+  Future<void> _updateAudioRouteMode(SpeakerRouteMode mode) async {
+    setState(() => _speakerRouteMode = mode);
+    if (mode != SpeakerRouteMode.mobileOnly && _audioController.isPlaying) {
+      await _audioController.pause();
+    }
+    await _persistAudioRouting();
+  }
+
+  Future<void> _toggleSpeakerSelection(String deviceId, bool selected) async {
+    setState(() {
+      if (selected) {
+        _selectedSpeakerIds = {..._selectedSpeakerIds, deviceId};
+      } else {
+        _selectedSpeakerIds = {..._selectedSpeakerIds}..remove(deviceId);
+      }
+    });
+    await _persistAudioRouting();
+  }
+
+  Future<void> _stopAudioOutput() async {
+    await _audioRouting.stopAllPlayback();
+    await _audioController.pause();
   }
 }
 

@@ -64,3 +64,13 @@ class SpeakerRouteSnapshot {
   final String audioOptionId;
   final Set<String> selectedDeviceIds;
 }
+
+class SpeakerOutputRoutingSnapshot {
+  const SpeakerOutputRoutingSnapshot({
+    required this.mode,
+    required this.selectedDeviceIds,
+  });
+
+  final SpeakerRouteMode mode;
+  final Set<String> selectedDeviceIds;
+}

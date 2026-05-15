@@ -161,6 +161,16 @@ class QuranAudioController extends ChangeNotifier {
     await _persistProgress();
   }
 
+  Future<void> setExternalActiveIndex(int index) async {
+    if (!hasPlaylist || index < 0 || index >= _ayahs.length) {
+      return;
+    }
+
+    _activeIndex = index;
+    await _persistProgress();
+    notifyListeners();
+  }
+
   Future<void> pause() async {
     await _player.pause();
   }
