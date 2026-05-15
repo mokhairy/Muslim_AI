@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter_compass/flutter_compass.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
@@ -25,16 +29,25 @@ class _PrayerScreenState extends State<PrayerScreen> {
   bool _loading = true;
   bool _locating = false;
   bool _locationFromDevice = false;
+  double? _heading;
+  StreamSubscription<CompassEvent>? _compassSubscription;
   String _error = '';
 
   @override
   void initState() {
     super.initState();
+    _compassSubscription = FlutterCompass.events?.listen((event) {
+      if (!mounted || event.heading == null) {
+        return;
+      }
+      setState(() => _heading = event.heading);
+    });
     _bootstrap();
   }
 
   @override
   void dispose() {
+    _compassSubscription?.cancel();
     _latitudeController.dispose();
     _longitudeController.dispose();
     super.dispose();
@@ -266,7 +279,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
         else ...[
           if (_prayerTimes != null) _PrayerTimesCard(data: _prayerTimes!),
           const SizedBox(height: 12),
-          if (_qibla != null) _QiblaCard(data: _qibla!),
+          if (_qibla != null) _QiblaCard(data: _qibla!, heading: _heading),
         ],
       ],
     );
@@ -316,13 +329,30 @@ class _PrayerTimesCard extends StatelessWidget {
 }
 
 class _QiblaCard extends StatelessWidget {
-  const _QiblaCard({required this.data});
+  const _QiblaCard({required this.data, required this.heading});
 
   final QiblaResponse data;
+  final double? heading;
+
+  double get _relativeAngle {
+    if (heading == null) {
+      return data.direction;
+    }
+    return (data.direction - heading! + 360) % 360;
+  }
+
+  bool get _isAligned {
+    if (heading == null) {
+      return false;
+    }
+    final delta = _relativeAngle > 180 ? 360 - _relativeAngle : _relativeAngle;
+    return delta <= 10;
+  }
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
 
     return Card(
       child: Padding(
@@ -332,16 +362,118 @@ class _QiblaCard extends StatelessWidget {
           children: [
             Text('Qibla', style: textTheme.titleLarge),
             const SizedBox(height: 10),
+            Center(
+              child: _QiblaDial(
+                qiblaBearing: data.direction,
+                heading: heading,
+              ),
+            ),
+            const SizedBox(height: 16),
             Text(
-              '${data.direction.toStringAsFixed(1)}° from north',
+              heading == null
+                  ? '${data.direction.toStringAsFixed(1)}° from north'
+                  : 'Turn ${(heading! + _relativeAngle) % 360 >= 0 ? _relativeAngle.toStringAsFixed(1) : data.direction.toStringAsFixed(1)}° toward the Kaaba',
               style: textTheme.displaySmall?.copyWith(fontSize: 28),
             ),
+            const SizedBox(height: 8),
+            if (heading != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _isAligned
+                      ? scheme.primaryContainer
+                      : scheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _isAligned
+                      ? 'Aligned with qibla'
+                      : 'Rotate until the gold marker points up',
+                  style: textTheme.titleMedium,
+                ),
+              )
+            else
+              Text(
+                'Compass heading is unavailable on this device, so the finder is showing the qibla bearing from north.',
+                style: textTheme.bodyMedium,
+              ),
             const SizedBox(height: 8),
             Text(
               'Coordinates ${data.latitude.toStringAsFixed(4)}, ${data.longitude.toStringAsFixed(4)}',
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _QiblaDial extends StatelessWidget {
+  const _QiblaDial({
+    required this.qiblaBearing,
+    required this.heading,
+  });
+
+  final double qiblaBearing;
+  final double? heading;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final relativeAngle = heading == null
+        ? qiblaBearing
+        : (qiblaBearing - heading! + 360) % 360;
+
+    return SizedBox(
+      width: 220,
+      height: 220,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 220,
+            height: 220,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+              border: Border.all(color: scheme.primary.withValues(alpha: 0.22)),
+            ),
+          ),
+          Positioned(top: 18, child: Text('N', style: Theme.of(context).textTheme.titleMedium)),
+          Positioned(bottom: 18, child: Text('S', style: Theme.of(context).textTheme.titleMedium)),
+          Positioned(left: 18, child: Text('W', style: Theme.of(context).textTheme.titleMedium)),
+          Positioned(right: 18, child: Text('E', style: Theme.of(context).textTheme.titleMedium)),
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: scheme.primary,
+              shape: BoxShape.circle,
+            ),
+          ),
+          Transform.rotate(
+            angle: -math.pi * 2 * (heading ?? 0) / 360,
+            child: Icon(
+              Icons.navigation_rounded,
+              size: 88,
+              color: scheme.primary.withValues(alpha: 0.28),
+            ),
+          ),
+          Transform.rotate(
+            angle: math.pi * 2 * relativeAngle / 360,
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.arrow_drop_up_rounded,
+                  size: 92,
+                  color: Color(0xFFC89545),
+                ),
+                SizedBox(height: 112),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

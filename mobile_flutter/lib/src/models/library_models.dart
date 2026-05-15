@@ -1,11 +1,13 @@
 class HadithItem {
   const HadithItem({
     required this.number,
+    required this.arabicText,
     required this.translation,
     required this.reference,
   });
 
   final String number;
+  final String arabicText;
   final String translation;
   final String reference;
 }
@@ -55,8 +57,13 @@ class AdhkarCategoryData {
 }
 
 class HisnMuslimData {
-  HisnMuslimData({required this.categoryName, required this.entries});
+  HisnMuslimData({
+    required this.categoryName,
+    required this.entries,
+    this.audioSource,
+  });
 
   final String categoryName;
   final List<AdhkarEntry> entries;
+  final AdhkarAudioSource? audioSource;
 }

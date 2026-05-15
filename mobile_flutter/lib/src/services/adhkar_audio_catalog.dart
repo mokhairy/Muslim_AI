@@ -2,6 +2,7 @@ import '../models/library_models.dart';
 
 class AdhkarAudioCatalog {
   static const quranRecitationReaderId = '7';
+  static const hisnCollectionCategoryId = 27;
 
   static const Map<String, AdhkarAudioSource> categoryAudio = {
     'أذكار الصباح': AdhkarAudioSource(
@@ -51,7 +52,7 @@ class AdhkarAudioCatalog {
   static const Map<String, int> hisnMuslimCategoryIds = {
     'أذكار بعد السلام من الصلاة المفروضة': 25,
     'تسابيح': 130,
-    'أذكار النوم': 28,
+    'أذكار النوم': 0,
     'أذكار الاستيقاظ': 1,
   };
 }

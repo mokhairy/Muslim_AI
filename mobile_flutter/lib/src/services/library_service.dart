@@ -38,15 +38,25 @@ class LibraryService {
     int page = 1,
     int limit = 12,
   }) async {
-    final url =
+    final englishUrl =
         'https://raw.githubusercontent.com/fawazahmed0/hadith-api/1/editions/$collection/sections/1.min.json';
+    final arabicUrl =
+        'https://raw.githubusercontent.com/fawazahmed0/hadith-api/1/editions/ara-bukhari/sections/1.min.json';
 
     try {
-      final payload = await fetchJson(url) as Map<String, dynamic>;
-      final rows = payload['hadiths'] as List<dynamic>? ?? const [];
+      final englishPayload = await fetchJson(englishUrl) as Map<String, dynamic>;
+      final arabicPayload = await fetchJson(arabicUrl) as Map<String, dynamic>;
+      final englishRows =
+          englishPayload['hadiths'] as List<dynamic>? ?? const [];
+      final arabicRows = arabicPayload['hadiths'] as List<dynamic>? ?? const [];
       final start = (page - 1) * limit;
-      return rows.skip(start).take(limit).map((item) {
-        final row = item as Map<String, dynamic>;
+      return List.generate(limit, (index) => start + index)
+          .where((index) => index < englishRows.length)
+          .map((index) {
+        final row = englishRows[index] as Map<String, dynamic>;
+        final arabicRow = index < arabicRows.length
+            ? arabicRows[index] as Map<String, dynamic>
+            : const <String, dynamic>{};
         final reference = row['reference'] as Map<String, dynamic>? ?? const {};
         final book = reference['book']?.toString() ?? '';
         final hadith = reference['hadith']?.toString() ?? '';
@@ -56,6 +66,7 @@ class LibraryService {
               row['hadithnumber']?.toString() ??
               row['arabicnumber']?.toString() ??
               '',
+          arabicText: arabicRow['text']?.toString() ?? '',
           translation: row['text']?.toString() ?? '',
           reference: [
             if (book.isNotEmpty) 'Book $book',
@@ -67,6 +78,8 @@ class LibraryService {
       return const [
         HadithItem(
           number: '1',
+          arabicText:
+              'إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ، وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى.',
           translation:
               'Narrated Umar ibn Al-Khattab: deeds are judged by intentions, and every person will have only what they intended.',
           reference: 'Sahih al-Bukhari',
@@ -113,14 +126,30 @@ class LibraryService {
   }
 
   Future<HisnMuslimData> fetchHisnMuslimCollection() async {
-    final payload =
-        await _loadAssetJson('assets/data/hisn-muslim-27.snapshot.json')
-            as Map<String, dynamic>;
-    final first = payload.entries.first;
-    return HisnMuslimData(
-      categoryName: first.key,
-      entries: _flattenEntries(first.value).toList(),
-    );
+    try {
+      final entries = await _fetchHisnMuslimCategoryEntries(
+        categoryId: AdhkarAudioCatalog.hisnCollectionCategoryId,
+        fallbackTitle: 'أذكار الصباح والمساء',
+      );
+      return HisnMuslimData(
+        categoryName: 'أذكار الصباح والمساء',
+        entries: entries,
+        audioSource: const AdhkarAudioSource(
+          label: 'Hisn al-Muslim recorded collection',
+          supportsEntrySync: true,
+          voiceDescription: 'حصن المسلم بصوت عربي مسجل',
+        ),
+      );
+    } catch (_) {
+      final payload =
+          await _loadAssetJson('assets/data/hisn-muslim-27.snapshot.json')
+              as Map<String, dynamic>;
+      final first = payload.entries.first;
+      return HisnMuslimData(
+        categoryName: first.key,
+        entries: _flattenEntries(first.value).toList(),
+      );
+    }
   }
 
   Future<dynamic> _loadAssetJson(String assetPath) async {
