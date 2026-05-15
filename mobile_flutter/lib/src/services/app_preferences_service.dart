@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/prayer_models.dart';
+
 class PrayerLocationSnapshot {
   const PrayerLocationSnapshot({
     required this.latitude,
@@ -39,6 +41,9 @@ class AppPreferencesService {
   static const _prayerLatitudeKey = 'prayer.latitude';
   static const _prayerLongitudeKey = 'prayer.longitude';
   static const _prayerFromDeviceKey = 'prayer.from_device';
+  static const _speakerRouteModeKey = 'prayer.speaker_route_mode';
+  static const _speakerAudioOptionKey = 'prayer.speaker_audio_option';
+  static const _speakerDeviceIdsKey = 'prayer.speaker_device_ids';
 
   static const _quranSurahKey = 'quran.surah';
   static const _quranTranslationKey = 'quran.translation';
@@ -75,6 +80,42 @@ class AppPreferencesService {
       latitude: latitude,
       longitude: longitude,
       fromDevice: prefs.getBool(_prayerFromDeviceKey) ?? false,
+    );
+  }
+
+  Future<void> saveSpeakerRouting({
+    required SpeakerRouteMode mode,
+    required String audioOptionId,
+    required Set<String> selectedDeviceIds,
+  }) async {
+    final prefs = await _prefs();
+    await prefs.setString(_speakerRouteModeKey, mode.name);
+    await prefs.setString(_speakerAudioOptionKey, audioOptionId);
+    await prefs.setStringList(
+      _speakerDeviceIdsKey,
+      selectedDeviceIds.toList(growable: false),
+    );
+  }
+
+  Future<SpeakerRouteSnapshot> loadSpeakerRouting({
+    required SpeakerRouteMode defaultMode,
+    required String defaultAudioOptionId,
+  }) async {
+    final prefs = await _prefs();
+    final modeName = prefs.getString(_speakerRouteModeKey);
+    SpeakerRouteMode? mode;
+    for (final item in SpeakerRouteMode.values) {
+      if (item.name == modeName) {
+        mode = item;
+        break;
+      }
+    }
+    return SpeakerRouteSnapshot(
+      mode: mode ?? defaultMode,
+      audioOptionId:
+          prefs.getString(_speakerAudioOptionKey) ?? defaultAudioOptionId,
+      selectedDeviceIds:
+          prefs.getStringList(_speakerDeviceIdsKey)?.toSet() ?? <String>{},
     );
   }
 

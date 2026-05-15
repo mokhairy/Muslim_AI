@@ -1,6 +1,6 @@
 import 'package:just_audio/just_audio.dart';
 
-enum SharedAudioOwner { none, quran, library }
+enum SharedAudioOwner { none, quran, library, prayer }
 
 class SharedAudioPlayer {
   SharedAudioPlayer._();

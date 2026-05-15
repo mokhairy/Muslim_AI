@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:dart_cast/dart_cast.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,6 +9,7 @@ import 'package:intl/intl.dart';
 
 import '../models/prayer_models.dart';
 import '../services/app_preferences_service.dart';
+import '../services/prayer_audio_routing_service.dart';
 import '../services/prayer_service.dart';
 
 class PrayerScreen extends StatefulWidget {
@@ -20,6 +22,7 @@ class PrayerScreen extends StatefulWidget {
 class _PrayerScreenState extends State<PrayerScreen> {
   final _service = PrayerService();
   final _preferences = AppPreferencesService.instance;
+  final _audioRouting = PrayerAudioRoutingService();
   final _latitudeController = TextEditingController(text: '23.5880');
   final _longitudeController = TextEditingController(text: '58.3829');
 
@@ -30,12 +33,17 @@ class _PrayerScreenState extends State<PrayerScreen> {
   bool _locating = false;
   bool _locationFromDevice = false;
   double? _heading;
+  SpeakerRouteMode _speakerRouteMode = SpeakerRouteMode.mobileOnly;
+  late String _selectedAudioOptionId;
+  Set<String> _selectedSpeakerIds = <String>{};
   StreamSubscription<CompassEvent>? _compassSubscription;
   String _error = '';
 
   @override
   void initState() {
     super.initState();
+    _selectedAudioOptionId = _audioRouting.defaultAudioOption.id;
+    _audioRouting.addListener(_handleAudioRoutingChanged);
     _compassSubscription = FlutterCompass.events?.listen((event) {
       if (!mounted || event.heading == null) {
         return;
@@ -48,6 +56,8 @@ class _PrayerScreenState extends State<PrayerScreen> {
   @override
   void dispose() {
     _compassSubscription?.cancel();
+    _audioRouting.removeListener(_handleAudioRoutingChanged);
+    unawaited(_audioRouting.shutdown());
     _latitudeController.dispose();
     _longitudeController.dispose();
     super.dispose();
@@ -74,8 +84,36 @@ class _PrayerScreenState extends State<PrayerScreen> {
       _longitudeController.text = savedLocation.longitude.toStringAsFixed(4);
       _locationFromDevice = savedLocation.fromDevice;
     }
+    final savedRouting = await _preferences.loadSpeakerRouting(
+      defaultMode: SpeakerRouteMode.mobileOnly,
+      defaultAudioOptionId: _audioRouting.defaultAudioOption.id,
+    );
+    _speakerRouteMode = savedRouting.mode;
+    _selectedAudioOptionId =
+        _audioRouting.optionById(savedRouting.audioOptionId)?.id ??
+        _audioRouting.defaultAudioOption.id;
+    _selectedSpeakerIds = savedRouting.selectedDeviceIds;
     await _load();
   }
+
+  void _handleAudioRoutingChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+  }
+
+  Future<void> _persistSpeakerRouting() {
+    return _preferences.saveSpeakerRouting(
+      mode: _speakerRouteMode,
+      audioOptionId: _selectedAudioOptionId,
+      selectedDeviceIds: _selectedSpeakerIds,
+    );
+  }
+
+  PrayerAudioOption get _selectedAudioOption =>
+      _audioRouting.optionById(_selectedAudioOptionId) ??
+      _audioRouting.defaultAudioOption;
 
   Future<void> _load() async {
     final latitude = double.tryParse(_latitudeController.text.trim());
@@ -179,6 +217,43 @@ class _PrayerScreenState extends State<PrayerScreen> {
     }
   }
 
+  Future<void> _playSelectedAudio() async {
+    final option = _selectedAudioOption;
+    await _persistSpeakerRouting();
+
+    if (_speakerRouteMode == SpeakerRouteMode.mobileOnly) {
+      await _audioRouting.playOnPhone(option);
+      return;
+    }
+
+    await _audioRouting.broadcast(
+      option: option,
+      mode: _speakerRouteMode,
+      selectedDeviceIds: _selectedSpeakerIds,
+    );
+  }
+
+  Future<void> _toggleSpeakerSelection(String deviceId, bool selected) async {
+    setState(() {
+      if (selected) {
+        _selectedSpeakerIds = {..._selectedSpeakerIds, deviceId};
+      } else {
+        _selectedSpeakerIds = {..._selectedSpeakerIds}..remove(deviceId);
+      }
+    });
+    await _persistSpeakerRouting();
+  }
+
+  Future<void> _updateRouteMode(SpeakerRouteMode mode) async {
+    setState(() => _speakerRouteMode = mode);
+    await _persistSpeakerRouting();
+  }
+
+  Future<void> _updateAudioOption(String optionId) async {
+    setState(() => _selectedAudioOptionId = optionId);
+    await _persistSpeakerRouting();
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -189,7 +264,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
         Text('Prayer Times', style: textTheme.headlineSmall),
         const SizedBox(height: 8),
         Text(
-          'AlAdhan-backed prayer schedule with saved coordinates and a device-location shortcut for accurate local prayer times. Qibla is computed locally on-device from your coordinates.',
+          'AlAdhan-backed prayer schedule with saved coordinates, a device-location shortcut, local qibla guidance, and local-network audio routing for Quran, adhan, and adhkar.',
           style: textTheme.bodyMedium,
         ),
         const SizedBox(height: 16),
@@ -280,6 +355,28 @@ class _PrayerScreenState extends State<PrayerScreen> {
           if (_prayerTimes != null) _PrayerTimesCard(data: _prayerTimes!),
           const SizedBox(height: 12),
           if (_qibla != null) _QiblaCard(data: _qibla!, heading: _heading),
+          const SizedBox(height: 12),
+          _SpeakerRoutingCard(
+            routeMode: _speakerRouteMode,
+            selectedAudioOptionId: _selectedAudioOptionId,
+            selectedSpeakerIds: _selectedSpeakerIds,
+            audioOptions: PrayerAudioRoutingService.audioOptions,
+            discoveredDevices: _audioRouting.devices,
+            isDiscovering: _audioRouting.isDiscovering,
+            isBusy: _audioRouting.isBusy,
+            statusMessage: _audioRouting.statusMessage,
+            errorMessage: _audioRouting.errorMessage,
+            isPhonePlaybackActive: _audioRouting.isPhonePlaybackActive,
+            hasRemotePlayback: _audioRouting.hasRemotePlayback,
+            onScanPressed: _audioRouting.isDiscovering
+                ? _audioRouting.stopDiscovery
+                : _audioRouting.startDiscovery,
+            onPlayPressed: _playSelectedAudio,
+            onStopPressed: _audioRouting.stopAllPlayback,
+            onRouteModeChanged: _updateRouteMode,
+            onAudioOptionChanged: _updateAudioOption,
+            onSpeakerSelectionChanged: _toggleSpeakerSelection,
+          ),
         ],
       ],
     );
@@ -474,6 +571,257 @@ class _QiblaDial extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SpeakerRoutingCard extends StatelessWidget {
+  const _SpeakerRoutingCard({
+    required this.routeMode,
+    required this.selectedAudioOptionId,
+    required this.selectedSpeakerIds,
+    required this.audioOptions,
+    required this.discoveredDevices,
+    required this.isDiscovering,
+    required this.isBusy,
+    required this.statusMessage,
+    required this.errorMessage,
+    required this.isPhonePlaybackActive,
+    required this.hasRemotePlayback,
+    required this.onScanPressed,
+    required this.onPlayPressed,
+    required this.onStopPressed,
+    required this.onRouteModeChanged,
+    required this.onAudioOptionChanged,
+    required this.onSpeakerSelectionChanged,
+  });
+
+  final SpeakerRouteMode routeMode;
+  final String selectedAudioOptionId;
+  final Set<String> selectedSpeakerIds;
+  final List<PrayerAudioOption> audioOptions;
+  final List<CastDevice> discoveredDevices;
+  final bool isDiscovering;
+  final bool isBusy;
+  final String statusMessage;
+  final String errorMessage;
+  final bool isPhonePlaybackActive;
+  final bool hasRemotePlayback;
+  final Future<void> Function() onScanPressed;
+  final Future<void> Function() onPlayPressed;
+  final Future<void> Function() onStopPressed;
+  final Future<void> Function(SpeakerRouteMode mode) onRouteModeChanged;
+  final Future<void> Function(String optionId) onAudioOptionChanged;
+  final Future<void> Function(String deviceId, bool selected)
+  onSpeakerSelectionChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Smart Speaker Routing', style: textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text(
+              'Scan the local network for Chromecast and DLNA speakers, then choose whether Quran, adhan, or adhkar should play on this phone only or broadcast to selected speakers.',
+              style: textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: selectedAudioOptionId,
+              decoration: const InputDecoration(
+                labelText: 'Audio content',
+                border: OutlineInputBorder(),
+              ),
+              items: audioOptions
+                  .map(
+                    (option) => DropdownMenuItem<String>(
+                      value: option.id,
+                      child: Text('${option.category} · ${option.label}'),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: isBusy
+                  ? null
+                  : (value) {
+                      if (value != null) {
+                        unawaited(onAudioOptionChanged(value));
+                      }
+                    },
+            ),
+            const SizedBox(height: 12),
+            Text(
+              audioOptions
+                      .firstWhere((option) => option.id == selectedAudioOptionId)
+                      .description,
+              style: textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            Text('Playback target', style: textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('This phone'),
+                  selected: routeMode == SpeakerRouteMode.mobileOnly,
+                  onSelected: isBusy
+                      ? null
+                      : (_) {
+                          unawaited(
+                            onRouteModeChanged(SpeakerRouteMode.mobileOnly),
+                          );
+                        },
+                ),
+                ChoiceChip(
+                  label: const Text('Selected speakers'),
+                  selected: routeMode == SpeakerRouteMode.selectedSpeakers,
+                  onSelected: isBusy
+                      ? null
+                      : (_) {
+                          unawaited(
+                            onRouteModeChanged(
+                              SpeakerRouteMode.selectedSpeakers,
+                            ),
+                          );
+                        },
+                ),
+                ChoiceChip(
+                  label: const Text('All speakers'),
+                  selected: routeMode == SpeakerRouteMode.allDiscoveredSpeakers,
+                  onSelected: isBusy
+                      ? null
+                      : (_) {
+                          unawaited(
+                            onRouteModeChanged(
+                              SpeakerRouteMode.allDiscoveredSpeakers,
+                            ),
+                          );
+                        },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: isBusy ? null : () => unawaited(onScanPressed()),
+                    icon: Icon(
+                      isDiscovering
+                          ? Icons.stop_circle_outlined
+                          : Icons.speaker_group_outlined,
+                    ),
+                    label: Text(isDiscovering ? 'Stop scan' : 'Scan speakers'),
+                  ),
+                ),
+              ],
+            ),
+            if (statusMessage.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: scheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(statusMessage, style: textTheme.bodyMedium),
+              ),
+            ],
+            if (errorMessage.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: scheme.errorContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  errorMessage,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: scheme.onErrorContainer,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Text('Discovered speakers', style: textTheme.titleMedium),
+            const SizedBox(height: 8),
+            if (discoveredDevices.isEmpty)
+              Text(
+                isDiscovering
+                    ? 'Scanning… supported speakers will appear here.'
+                    : 'No supported speakers discovered yet.',
+                style: textTheme.bodyMedium,
+              )
+            else
+              Column(
+                children: [
+                  for (final CastDevice device in discoveredDevices)
+                    CheckboxListTile(
+                      dense: true,
+                      value: selectedSpeakerIds.contains(device.id),
+                      onChanged:
+                          routeMode == SpeakerRouteMode.mobileOnly || isBusy
+                          ? null
+                          : (value) {
+                              if (value != null) {
+                                unawaited(
+                                  onSpeakerSelectionChanged(device.id, value),
+                                );
+                              }
+                            },
+                      title: Text(device.name.toString()),
+                      subtitle: Text(
+                        '${device.protocol.name.toUpperCase()} • ${device.address.address}',
+                      ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                ],
+              ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: isBusy ? null : () => unawaited(onPlayPressed()),
+                    icon: Icon(
+                      routeMode == SpeakerRouteMode.mobileOnly
+                          ? Icons.play_arrow_rounded
+                          : Icons.cast_connected_rounded,
+                    ),
+                    label: Text(
+                      routeMode == SpeakerRouteMode.mobileOnly
+                          ? 'Play on this phone'
+                          : 'Broadcast now',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: isBusy || (!isPhonePlaybackActive && !hasRemotePlayback)
+                        ? null
+                        : () => unawaited(onStopPressed()),
+                    icon: const Icon(Icons.stop_circle_outlined),
+                    label: const Text('Stop playback'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

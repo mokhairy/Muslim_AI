@@ -28,6 +28,12 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>MuslimAI uses your location to calculate prayer times and qibla for where you are now.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>MuslimAI uses your local network to discover supported smart speakers and broadcast Quran, adhan, and adhkar audio to them.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_googlecast._tcp</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

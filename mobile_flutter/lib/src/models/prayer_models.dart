@@ -32,3 +32,35 @@ class QiblaResponse {
   final double latitude;
   final double longitude;
 }
+
+enum SpeakerRouteMode { mobileOnly, selectedSpeakers, allDiscoveredSpeakers }
+
+class PrayerAudioOption {
+  const PrayerAudioOption({
+    required this.id,
+    required this.category,
+    required this.label,
+    required this.description,
+    required this.audioUrl,
+    required this.mediaType,
+  });
+
+  final String id;
+  final String category;
+  final String label;
+  final String description;
+  final String audioUrl;
+  final String mediaType;
+}
+
+class SpeakerRouteSnapshot {
+  const SpeakerRouteSnapshot({
+    required this.mode,
+    required this.audioOptionId,
+    required this.selectedDeviceIds,
+  });
+
+  final SpeakerRouteMode mode;
+  final String audioOptionId;
+  final Set<String> selectedDeviceIds;
+}
