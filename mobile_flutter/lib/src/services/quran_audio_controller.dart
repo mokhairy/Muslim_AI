@@ -6,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 
 import '../models/quran_models.dart';
 import 'app_preferences_service.dart';
+import 'offline_cache_service.dart';
 import 'shared_audio_player.dart';
 
 class QuranAudioController extends ChangeNotifier {
@@ -15,6 +16,7 @@ class QuranAudioController extends ChangeNotifier {
 
   final SharedAudioPlayer _sharedAudio = SharedAudioPlayer.instance;
   final AppPreferencesService _preferences = AppPreferencesService.instance;
+  final OfflineCacheService _offlineCache = OfflineCacheService.instance;
 
   SurahSummary? _surah;
   List<AyahRow> _ayahs = const [];
@@ -90,20 +92,25 @@ class QuranAudioController extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    final sources = ayahs
-        .where((ayah) => ayah.audioUrl.isNotEmpty)
-        .map(
-          (ayah) => AudioSource.uri(
-            Uri.parse(ayah.audioUrl),
-            tag: MediaItem(
-              id: '${surah.number}:${ayah.numberInSurah}:$readerId',
-              album: surah.englishName,
-              title: 'Ayah ${ayah.numberInSurah}',
-              artist: readerLabel,
-            ),
+    final sources = <AudioSource>[];
+    for (final ayah in ayahs) {
+      if (ayah.audioUrl.isEmpty) {
+        continue;
+      }
+
+      final audioUri = await _offlineCache.resolvePlayableAudioUri(ayah.audioUrl);
+      sources.add(
+        AudioSource.uri(
+          audioUri,
+          tag: MediaItem(
+            id: '${surah.number}:${ayah.numberInSurah}:$readerId',
+            album: surah.englishName,
+            title: 'Ayah ${ayah.numberInSurah}',
+            artist: readerLabel,
           ),
-        )
-        .toList(growable: false);
+        ),
+      );
+    }
 
     if (sources.isEmpty) {
       _isLoading = false;

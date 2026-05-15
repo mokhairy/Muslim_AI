@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../screenshot_scene.dart';
 import '../models/quran_models.dart';
 import '../services/app_preferences_service.dart';
+import '../services/offline_cache_service.dart';
 import '../services/quran_audio_controller.dart';
 import '../services/quran_service.dart';
 import '../widgets/arabic_text.dart';
@@ -42,6 +43,7 @@ class _QuranScreenState extends State<QuranScreen> {
   final _service = QuranService();
   final _preferences = AppPreferencesService.instance;
   final _audioController = QuranAudioController.instance;
+  final _offlineCache = OfflineCacheService.instance;
 
   List<SurahSummary> _surahs = const [];
   SurahDetail? _detail;
@@ -52,6 +54,8 @@ class _QuranScreenState extends State<QuranScreen> {
   int _surahNumber = 1;
   int _initialAyahIndex = 0;
   bool _loading = true;
+  bool _downloadBusy = false;
+  int _downloadedAyahAudioCount = 0;
   String _error = '';
 
   @override
@@ -133,6 +137,7 @@ class _QuranScreenState extends State<QuranScreen> {
           autoplay: false,
         );
       }
+      await _refreshDownloadStatus();
     } catch (error) {
       if (!mounted) {
         return;
@@ -182,6 +187,7 @@ class _QuranScreenState extends State<QuranScreen> {
           autoplay: autoplay && _mode != QuranMode.read,
         );
       }
+      await _refreshDownloadStatus();
     } catch (error) {
       if (!mounted) {
         return;
@@ -216,6 +222,83 @@ class _QuranScreenState extends State<QuranScreen> {
       return;
     }
     setState(() => _bookmarks = bookmarks);
+  }
+
+  List<String> get _currentAudioUrls =>
+      (_detail?.ayahs ?? const <AyahRow>[])
+          .where((ayah) => ayah.audioUrl.isNotEmpty)
+          .map((ayah) => ayah.audioUrl)
+          .toSet()
+          .toList(growable: false);
+
+  Future<void> _refreshDownloadStatus() async {
+    final downloadedCount = await _offlineCache.countDownloadedAudioUrls(
+      _currentAudioUrls,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _downloadedAyahAudioCount = downloadedCount);
+  }
+
+  Future<void> _downloadCurrentSurahAudio() async {
+    final urls = _currentAudioUrls;
+    if (urls.isEmpty) {
+      return;
+    }
+
+    final shouldResume = _audioController.isPlaying && _mode != QuranMode.read;
+    setState(() => _downloadBusy = true);
+    try {
+      await _offlineCache.downloadAudioUrls(urls);
+      if (_detail?.surah != null) {
+        await _audioController.setPlaylist(
+          surah: _detail!.surah!,
+          ayahs: _detail!.ayahs,
+          translationId: _translation,
+          readerId: _reader,
+          readerLabel: _readerLabelFor(_reader),
+          mode: _quranModeValue(_mode),
+          initialIndex: _audioController.activeIndex,
+          autoplay: shouldResume,
+        );
+      }
+      await _refreshDownloadStatus();
+    } finally {
+      if (mounted) {
+        setState(() => _downloadBusy = false);
+      }
+    }
+  }
+
+  Future<void> _removeCurrentSurahAudio() async {
+    final urls = _currentAudioUrls;
+    if (urls.isEmpty) {
+      return;
+    }
+
+    final shouldResume = _audioController.isPlaying && _mode != QuranMode.read;
+    setState(() => _downloadBusy = true);
+    try {
+      await _offlineCache.removeAudioUrls(urls);
+      if (_detail?.surah != null) {
+        await _audioController.setPlaylist(
+          surah: _detail!.surah!,
+          ayahs: _detail!.ayahs,
+          translationId: _translation,
+          readerId: _reader,
+          readerLabel: _readerLabelFor(_reader),
+          mode: _quranModeValue(_mode),
+          initialIndex: _audioController.activeIndex,
+          autoplay: shouldResume,
+        );
+      }
+      await _refreshDownloadStatus();
+    } finally {
+      if (mounted) {
+        setState(() => _downloadBusy = false);
+      }
+    }
   }
 
   String _readerLabelFor(String value) {
@@ -349,6 +432,16 @@ class _QuranScreenState extends State<QuranScreen> {
                   selected: {_mode},
                   onSelectionChanged: (value) => _setMode(value.first),
                 ),
+                const SizedBox(height: 16),
+                _OfflineQuranAudioCard(
+                  downloadedCount: _downloadedAyahAudioCount,
+                  totalCount: ayahs.where((ayah) => ayah.audioUrl.isNotEmpty).length,
+                  isBusy: _downloadBusy,
+                  onDownload: _downloadCurrentSurahAudio,
+                  onRemove: _downloadedAyahAudioCount > 0
+                      ? _removeCurrentSurahAudio
+                      : null,
+                ),
               ],
             ),
           ),
@@ -450,6 +543,56 @@ class _ResumeCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _OfflineQuranAudioCard extends StatelessWidget {
+  const _OfflineQuranAudioCard({
+    required this.downloadedCount,
+    required this.totalCount,
+    required this.isBusy,
+    required this.onDownload,
+    required this.onRemove,
+  });
+
+  final int downloadedCount;
+  final int totalCount;
+  final bool isBusy;
+  final VoidCallback onDownload;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final fullyDownloaded = totalCount > 0 && downloadedCount == totalCount;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          fullyDownloaded
+              ? 'This surah audio is fully saved for offline playback.'
+              : '$downloadedCount of $totalCount ayah audio files are saved for offline playback.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton.tonalIcon(
+              onPressed: isBusy || totalCount == 0 ? null : onDownload,
+              icon: const Icon(Icons.download_for_offline_outlined),
+              label: Text(isBusy ? 'Working…' : 'Download audio'),
+            ),
+            OutlinedButton.icon(
+              onPressed: isBusy ? null : onRemove,
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Remove offline'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

@@ -39,7 +39,9 @@ dependencies:
   just_audio: ^0.10.5
   just_audio_background: ^0.0.1-beta.17
   audio_service: ^0.18.18
+  crypto: ^3.0.6
   geolocator: ^14.0.2
+  path_provider: ^2.1.5
   shared_preferences: ^2.5.3
   flutter_compass: ^0.8.1
 

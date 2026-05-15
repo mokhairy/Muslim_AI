@@ -24,6 +24,8 @@ class MoreScreen extends StatelessWidget {
             'Quran now keeps a saved last-read position, verse bookmarks, and persistent playback controls.',
             'Verified recorded adhkar audio is wired for the morning and evening categories.',
             'The shell now exposes a persistent Quran mini-player above the tab bar.',
+            'API responses now cache locally so Quran and library content can reopen offline after a successful fetch.',
+            'Quran, adhkar, and Hisn Muslim audio can now be downloaded onto the device for offline playback.',
           ],
         ),
         const SizedBox(height: 12),
@@ -32,7 +34,7 @@ class MoreScreen extends StatelessWidget {
           bullets: [
             'Adhkar category audio is still partial; unsupported categories remain text-first until a verified recording is added.',
             'Category-level adhkar recordings do not expose entry timestamps, so read + listen remains visual accompaniment rather than exact line sync.',
-            'Offline caching and downloadable audio are still the next structural pass.',
+            'Offline mode still depends on a successful first fetch for remote Quran and Hisn Muslim content before those cached responses exist on the device.',
           ],
         ),
       ],

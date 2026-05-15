@@ -7,6 +7,7 @@ import 'package:just_audio/just_audio.dart';
 import '../models/library_models.dart';
 import '../screenshot_scene.dart';
 import '../services/library_service.dart';
+import '../services/offline_cache_service.dart';
 import '../services/quran_audio_controller.dart';
 import '../services/shared_audio_player.dart';
 import '../widgets/arabic_text.dart';
@@ -26,6 +27,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final _service = LibraryService();
   final _sharedAudio = SharedAudioPlayer.instance;
   final _quranAudioController = QuranAudioController.instance;
+  final _offlineCache = OfflineCacheService.instance;
 
   LibrarySection _section = AppScreenshotScene.librarySection == 'adhkar'
       ? LibrarySection.adhkar
@@ -42,7 +44,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
   bool _adhkarAudioLoading = false;
   bool _adhkarAudioPlaying = false;
   bool _adhkarUsesEntrySync = false;
+  bool _downloadBusy = false;
   int _adhkarActiveEntryIndex = 0;
+  int _downloadedAudioCount = 0;
   String _error = '';
   String _loadedAdhkarSignature = '';
   List<HadithItem> _hadithItems = const [];
@@ -54,6 +58,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   StreamSubscription<int?>? _adhkarCurrentIndexSubscription;
 
   AudioPlayer get _adhkarPlayer => _sharedAudio.player;
+
+  int get _downloadableAudioCount => _activeDownloadUrls.length;
 
   @override
   void initState() {
@@ -111,6 +117,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           _adhkarData = null;
           _hisnData = null;
           _adhkarAudioSource = null;
+          _downloadedAudioCount = 0;
           _loading = false;
         });
         return;
@@ -131,6 +138,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           _adhkarAudioSource = adhkar.audioSource;
           _loading = false;
         });
+        await _refreshDownloadStatus();
         return;
       }
 
@@ -149,6 +157,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         _adhkarAudioSource = hisn.audioSource;
         _loading = false;
       });
+      await _refreshDownloadStatus();
     } catch (error) {
       if (!mounted) {
         return;
@@ -174,6 +183,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
       _section == LibrarySection.hisn
           ? (_hisnData?.categoryName ?? 'Hisn Muslim')
           : (_adhkarData?.selectedCategory ?? 'Adhkar');
+
+  List<String> get _activeDownloadUrls {
+    final source = _activeAudioSource;
+    if (source == null) {
+      return const <String>[];
+    }
+
+    if (!source.supportsEntrySync) {
+      final url = source.url;
+      return url == null || url.isEmpty ? const <String>[] : [url];
+    }
+
+    final urls = <String>{
+      for (final entry in _activeEntries)
+        ...entry.audioUrls.where((url) => url.isNotEmpty),
+    };
+    return urls.toList(growable: false);
+  }
 
   Future<void> _resetAdhkarPlaybackForCategory(
     AdhkarCategoryData categoryData,
@@ -206,6 +233,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _adhkarTrackToEntryIndex = const [];
     _adhkarUsesEntrySync = false;
     _adhkarActiveEntryIndex = 0;
+  }
+
+  Future<void> _refreshDownloadStatus() async {
+    final urls = _activeDownloadUrls;
+    final downloadedCount = await _offlineCache.countDownloadedAudioUrls(urls);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _downloadedAudioCount = downloadedCount);
   }
 
   Future<void> _ensureAdhkarAudioLoaded() async {
@@ -249,7 +285,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         [
           for (var trackIndex = 0; trackIndex < trackUrls.length; trackIndex++)
             AudioSource.uri(
-              Uri.parse(trackUrls[trackIndex]),
+              await _offlineCache.resolvePlayableAudioUri(trackUrls[trackIndex]),
               tag: _buildAdhkarMediaItem(
                 entryIndex: trackToEntryIndex[trackIndex],
                 url: trackUrls[trackIndex],
@@ -273,7 +309,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     await _adhkarPlayer.setAudioSource(
       AudioSource.uri(
-        Uri.parse(categoryUrl),
+        await _offlineCache.resolvePlayableAudioUri(categoryUrl),
         tag: MediaItem(
           id: '$_activeCollectionTitle:category',
           album: _activeCollectionTitle,
@@ -289,6 +325,64 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _adhkarTrackToEntryIndex = const [];
     _adhkarActiveEntryIndex = 0;
     _loadedAdhkarSignature = signature;
+  }
+
+  Future<void> _downloadCurrentCollectionAudio() async {
+    final urls = _activeDownloadUrls;
+    if (urls.isEmpty) {
+      return;
+    }
+
+    final wasPlaying = _adhkarPlayer.playing;
+    setState(() => _downloadBusy = true);
+    try {
+      await _offlineCache.downloadAudioUrls(urls);
+      await _resetAudioForCurrentContent(
+        title: _activeCollectionTitle,
+        entries: _activeEntries,
+        source: _activeAudioSource,
+      );
+      await _refreshDownloadStatus();
+      if (_adhkarMode != AdhkarMode.read) {
+        await _ensureAdhkarAudioLoaded();
+        if (wasPlaying) {
+          await _adhkarPlayer.play();
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _downloadBusy = false);
+      }
+    }
+  }
+
+  Future<void> _removeCurrentCollectionAudio() async {
+    final urls = _activeDownloadUrls;
+    if (urls.isEmpty) {
+      return;
+    }
+
+    final wasPlaying = _adhkarPlayer.playing;
+    setState(() => _downloadBusy = true);
+    try {
+      await _offlineCache.removeAudioUrls(urls);
+      await _resetAudioForCurrentContent(
+        title: _activeCollectionTitle,
+        entries: _activeEntries,
+        source: _activeAudioSource,
+      );
+      await _refreshDownloadStatus();
+      if (_adhkarMode != AdhkarMode.read) {
+        await _ensureAdhkarAudioLoaded();
+        if (wasPlaying) {
+          await _adhkarPlayer.play();
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _downloadBusy = false);
+      }
+    }
   }
 
   String _buildAdhkarAudioSignature({
@@ -494,6 +588,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     ),
                   ),
                 ),
+              if (_adhkarAudioSource != null) ...[
+                if (_adhkarMode != AdhkarMode.read) const SizedBox(height: 12),
+                _OfflineAudioCard(
+                  downloadedCount: _downloadedAudioCount,
+                  totalCount: _downloadableAudioCount,
+                  isBusy: _downloadBusy,
+                  onDownload: _downloadCurrentCollectionAudio,
+                  onRemove: _downloadedAudioCount > 0
+                      ? _removeCurrentCollectionAudio
+                      : null,
+                ),
+              ],
               if (_adhkarMode != AdhkarMode.read) const SizedBox(height: 12),
             ],
           ),
@@ -529,6 +635,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   onPrevious: _adhkarUsesEntrySync ? _seekAdhkarPrevious : null,
                   onNext: _adhkarUsesEntrySync ? _seekAdhkarNext : null,
                 ),
+              if (_activeAudioSource != null) ...[
+                if (_adhkarMode != AdhkarMode.read) const SizedBox(height: 12),
+                _OfflineAudioCard(
+                  downloadedCount: _downloadedAudioCount,
+                  totalCount: _downloadableAudioCount,
+                  isBusy: _downloadBusy,
+                  onDownload: _downloadCurrentCollectionAudio,
+                  onRemove: _downloadedAudioCount > 0
+                      ? _removeCurrentCollectionAudio
+                      : null,
+                ),
+              ],
               if (_adhkarMode != AdhkarMode.read) const SizedBox(height: 12),
             ],
           ),
@@ -787,6 +905,67 @@ class _AdhkarListenOnlyCard extends StatelessWidget {
                 IconButton(
                   onPressed: isLoading ? null : onNext,
                   icon: const Icon(Icons.skip_next),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OfflineAudioCard extends StatelessWidget {
+  const _OfflineAudioCard({
+    required this.downloadedCount,
+    required this.totalCount,
+    required this.isBusy,
+    required this.onDownload,
+    required this.onRemove,
+  });
+
+  final int downloadedCount;
+  final int totalCount;
+  final bool isBusy;
+  final VoidCallback onDownload;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final fullyDownloaded = totalCount > 0 && downloadedCount == totalCount;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Offline audio',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              totalCount == 0
+                  ? 'No downloadable recording is attached to this collection yet.'
+                  : fullyDownloaded
+                  ? 'All $totalCount audio files for this collection are saved on the device.'
+                  : '$downloadedCount of $totalCount audio files are saved on the device.',
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: isBusy || totalCount == 0 ? null : onDownload,
+                  icon: const Icon(Icons.download_for_offline_outlined),
+                  label: Text(isBusy ? 'Working…' : 'Download audio'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: isBusy ? null : onRemove,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Remove offline'),
                 ),
               ],
             ),
