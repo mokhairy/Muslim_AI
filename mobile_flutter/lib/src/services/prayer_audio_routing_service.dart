@@ -16,10 +16,13 @@ class AudioOutputRoutingService extends ChangeNotifier {
       _castService = CastService(
         discoveryProviders: [
           ChromecastDiscoveryProvider(),
+          AirPlayDiscoveryProvider(),
           DlnaDiscoveryProvider(),
         ],
       ) {
-    _playerStateSubscription = _sharedAudio.player.playerStateStream.listen((_) {
+    _playerStateSubscription = _sharedAudio.player.playerStateStream.listen((
+      _,
+    ) {
       if (_sharedAudio.owner == _owner) {
         notifyListeners();
       }
@@ -32,7 +35,8 @@ class AudioOutputRoutingService extends ChangeNotifier {
       category: 'Quran',
       label: 'Surah Al-Fatihah · Alafasy',
       description: 'Streams recorded Quran recitation from Quranicaudio.',
-      audioUrl: 'https://download.quranicaudio.com/qdc/mishari_al_afasy/murattal/1.mp3',
+      audioUrl:
+          'https://download.quranicaudio.com/qdc/mishari_al_afasy/murattal/1.mp3',
       mediaType: 'mp3',
     ),
     PrayerAudioOption(
@@ -130,7 +134,8 @@ class AudioOutputRoutingService extends ChangeNotifier {
     await _discoverySubscription?.cancel();
     _devices = const [];
     _isDiscovering = true;
-    _statusMessage = 'Scanning the local network for Chromecast and DLNA speakers…';
+    _statusMessage =
+        'Scanning the local network for Chromecast, AirPlay, and DLNA speakers…';
     _errorMessage = '';
     notifyListeners();
 
@@ -138,6 +143,7 @@ class AudioOutputRoutingService extends ChangeNotifier {
         .startDiscovery(
           protocols: const {
             CastProtocol.chromecast,
+            CastProtocol.airplay,
             CastProtocol.dlna,
           },
           timeout: const Duration(seconds: 12),
@@ -145,7 +151,9 @@ class AudioOutputRoutingService extends ChangeNotifier {
         .listen(
           (devices) {
             _devices = List<CastDevice>.from(devices)
-              ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+              ..sort(
+                (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+              );
             _statusMessage = _devices.isEmpty
                 ? 'No smart speakers found yet. Keep the app open while the scan completes.'
                 : 'Found ${_devices.length} speaker${_devices.length == 1 ? '' : 's'} on this network.';
@@ -187,7 +195,9 @@ class AudioOutputRoutingService extends ChangeNotifier {
       await _stopRemoteSessions();
       await _sharedAudio.claim(_owner);
 
-      final audioUri = await _offlineCache.resolvePlayableAudioUri(option.audioUrl);
+      final audioUri = await _offlineCache.resolvePlayableAudioUri(
+        option.audioUrl,
+      );
       await _sharedAudio.player.setAudioSource(
         AudioSource.uri(
           audioUri,
@@ -329,7 +339,9 @@ class AudioOutputRoutingService extends ChangeNotifier {
   }
 
   Future<CastMedia> _buildCastMedia(PrayerAudioOption option) async {
-    final localPath = await _offlineCache.resolveDownloadedAudioPath(option.audioUrl);
+    final localPath = await _offlineCache.resolveDownloadedAudioPath(
+      option.audioUrl,
+    );
     if (localPath != null) {
       return CastMedia.file(
         filePath: localPath,
@@ -357,9 +369,7 @@ class AudioOutputRoutingService extends ChangeNotifier {
     final session = switch (device.protocol) {
       CastProtocol.chromecast => ChromecastSession(device: device),
       CastProtocol.dlna => DlnaSession.fromDevice(device),
-      CastProtocol.airplay => throw UnsupportedError(
-        'AirPlay discovery is not enabled in this build.',
-      ),
+      CastProtocol.airplay => AirPlaySession(device),
     };
 
     await session.connect();

@@ -19,30 +19,34 @@ class _ShellScreenState extends State<ShellScreen> {
   final _audioController = QuranAudioController.instance;
   int _index = AppScreenshotScene.initialTabIndex;
 
-  static const _screens = [
-    HomeScreen(),
-    PrayerScreen(),
-    QuranScreen(),
-    LibraryScreen(),
-    MoreScreen(),
-  ];
+  void _openTab(int index) {
+    setState(() => _index = index);
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _audioController,
       builder: (context, _) => Scaffold(
-        body: SafeArea(child: _screens[_index]),
+        body: SafeArea(
+          child: [
+            HomeScreen(onOpenTab: _openTab),
+            const PrayerScreen(),
+            const QuranScreen(),
+            const LibraryScreen(),
+            const MoreScreen(),
+          ][_index],
+        ),
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (_audioController.hasPlaylist) _MiniPlayer(
               controller: _audioController,
-              onOpenQuran: () => setState(() => _index = 2),
+              onOpenQuran: () => _openTab(2),
             ),
             NavigationBar(
               selectedIndex: _index,
-              onDestinationSelected: (value) => setState(() => _index = value),
+              onDestinationSelected: _openTab,
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.home_outlined),

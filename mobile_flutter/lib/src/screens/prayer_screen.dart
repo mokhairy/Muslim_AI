@@ -23,7 +23,9 @@ class PrayerScreen extends StatefulWidget {
 class _PrayerScreenState extends State<PrayerScreen> {
   final _service = PrayerService();
   final _preferences = AppPreferencesService.instance;
-  final _audioRouting = AudioOutputRoutingService(owner: SharedAudioOwner.prayer);
+  final _audioRouting = AudioOutputRoutingService(
+    owner: SharedAudioOwner.prayer,
+  );
   final _latitudeController = TextEditingController(text: '23.5880');
   final _longitudeController = TextEditingController(text: '58.3829');
 
@@ -196,7 +198,9 @@ class _PrayerScreenState extends State<PrayerScreen> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
 
       _latitudeController.text = position.latitude.toStringAsFixed(4);
@@ -360,7 +364,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
           AudioOutputRoutingCard(
             title: 'Smart Speaker Routing',
             description:
-                'Scan the local network for Chromecast and DLNA speakers, then choose whether Quran, adhan, or adhkar should play on this phone only or broadcast to selected speakers.',
+                'Scan the local network for Chromecast, AirPlay, and DLNA speakers, then choose whether Quran, adhan, or adhkar should play on this phone only or broadcast to selected speakers.',
             routeMode: _speakerRouteMode,
             selectedSpeakerIds: _selectedSpeakerIds,
             discoveredDevices: _audioRouting.devices,
@@ -499,10 +503,7 @@ class _QiblaCard extends StatelessWidget {
             Text('Qibla', style: textTheme.titleLarge),
             const SizedBox(height: 10),
             Center(
-              child: _QiblaDial(
-                qiblaBearing: data.direction,
-                heading: heading,
-              ),
+              child: _QiblaDial(qiblaBearing: data.direction, heading: heading),
             ),
             const SizedBox(height: 16),
             Text(
@@ -514,7 +515,10 @@ class _QiblaCard extends StatelessWidget {
             const SizedBox(height: 8),
             if (heading != null)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: _isAligned
                       ? scheme.primaryContainer
@@ -545,10 +549,7 @@ class _QiblaCard extends StatelessWidget {
 }
 
 class _QiblaDial extends StatelessWidget {
-  const _QiblaDial({
-    required this.qiblaBearing,
-    required this.heading,
-  });
+  const _QiblaDial({required this.qiblaBearing, required this.heading});
 
   final double qiblaBearing;
   final double? heading;
@@ -575,10 +576,22 @@ class _QiblaDial extends StatelessWidget {
               border: Border.all(color: scheme.primary.withValues(alpha: 0.22)),
             ),
           ),
-          Positioned(top: 18, child: Text('N', style: Theme.of(context).textTheme.titleMedium)),
-          Positioned(bottom: 18, child: Text('S', style: Theme.of(context).textTheme.titleMedium)),
-          Positioned(left: 18, child: Text('W', style: Theme.of(context).textTheme.titleMedium)),
-          Positioned(right: 18, child: Text('E', style: Theme.of(context).textTheme.titleMedium)),
+          Positioned(
+            top: 18,
+            child: Text('N', style: Theme.of(context).textTheme.titleMedium),
+          ),
+          Positioned(
+            bottom: 18,
+            child: Text('S', style: Theme.of(context).textTheme.titleMedium),
+          ),
+          Positioned(
+            left: 18,
+            child: Text('W', style: Theme.of(context).textTheme.titleMedium),
+          ),
+          Positioned(
+            right: 18,
+            child: Text('E', style: Theme.of(context).textTheme.titleMedium),
+          ),
           Container(
             width: 12,
             height: 12,

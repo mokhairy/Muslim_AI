@@ -13,7 +13,8 @@ void main() {
     expect(
       manifest.contains('android.permission.INTERNET'),
       isTrue,
-      reason: 'Release Android builds need network access for Quran, audio, and prayer APIs.',
+      reason:
+          'Release Android builds need network access for Quran, audio, and prayer APIs.',
     );
   });
 
@@ -38,7 +39,8 @@ void main() {
     expect(
       libraryScreen.contains('final _adhkarPlayer = AudioPlayer();'),
       isFalse,
-      reason: 'Library playback must not create a second background player instance.',
+      reason:
+          'Library playback must not create a second background player instance.',
     );
     expect(
       libraryScreen.contains('SharedAudioPlayer.instance'),
@@ -52,46 +54,137 @@ void main() {
     );
   });
 
-  test('android release manifest includes local speaker discovery permissions', () {
-    final manifest = File(
-      'android/app/src/main/AndroidManifest.xml',
+  test(
+    'android release manifest includes local speaker discovery permissions',
+    () {
+      final manifest = File(
+        'android/app/src/main/AndroidManifest.xml',
+      ).readAsStringSync();
+
+      expect(
+        manifest.contains('android.permission.ACCESS_WIFI_STATE'),
+        isTrue,
+        reason: 'Speaker discovery needs Wi-Fi state access on Android.',
+      );
+      expect(
+        manifest.contains('android.permission.CHANGE_WIFI_MULTICAST_STATE'),
+        isTrue,
+        reason: 'Chromecast and DLNA discovery require multicast on Android.',
+      );
+      expect(
+        manifest.contains('android.permission.ACCESS_NETWORK_STATE'),
+        isTrue,
+        reason:
+            'Speaker discovery should confirm network reachability in release builds.',
+      );
+    },
+  );
+
+  test('ios release plist includes feature parity permissions', () {
+    final plist = File('ios/Runner/Info.plist').readAsStringSync();
+    final project = File(
+      'ios/Runner.xcodeproj/project.pbxproj',
     ).readAsStringSync();
 
     expect(
-      manifest.contains('android.permission.ACCESS_WIFI_STATE'),
+      plist.contains('NSLocationWhenInUseUsageDescription'),
       isTrue,
-      reason: 'Speaker discovery needs Wi-Fi state access on Android.',
+      reason: 'iOS needs location access for prayer times and qibla.',
     );
     expect(
-      manifest.contains('android.permission.CHANGE_WIFI_MULTICAST_STATE'),
+      plist.contains('NSLocalNetworkUsageDescription'),
       isTrue,
-      reason: 'Chromecast and DLNA discovery require multicast on Android.',
+      reason: 'iOS needs local network disclosure for smart speaker discovery.',
     );
     expect(
-      manifest.contains('android.permission.ACCESS_NETWORK_STATE'),
+      plist.contains('_googlecast._tcp'),
       isTrue,
-      reason: 'Speaker discovery should confirm network reachability in release builds.',
+      reason:
+          'Chromecast discovery on iOS must be declared as a Bonjour service.',
+    );
+    expect(
+      plist.contains('_airplay._tcp'),
+      isTrue,
+      reason: 'AirPlay discovery on iOS must be declared as a Bonjour service.',
+    );
+    expect(
+      plist.contains('_raop._tcp'),
+      isTrue,
+      reason:
+          'AirPlay audio receivers commonly advertise RAOP and must be discoverable.',
+    );
+    expect(
+      plist.contains('<string>audio</string>'),
+      isTrue,
+      reason:
+          'iOS must keep background audio enabled for Quran and library playback.',
+    );
+    expect(
+      project.contains('TARGETED_DEVICE_FAMILY = "1,2";'),
+      isTrue,
+      reason:
+          'The Flutter app should continue shipping as one iPhone and iPad app.',
     );
   });
 
-  test('prayer audio router exposes real mp3 sources for phone or speaker playback', () {
-    final options = PrayerAudioRoutingService.audioOptions;
+  test(
+    'prayer audio router exposes real mp3 sources for phone or speaker playback',
+    () {
+      final options = PrayerAudioRoutingService.audioOptions;
 
-    expect(options, isNotEmpty);
+      expect(options, isNotEmpty);
+      expect(
+        options.any(
+          (item) => item.category == 'Quran' && item.audioUrl.endsWith('.mp3'),
+        ),
+        isTrue,
+        reason:
+            'Prayer tab speaker routing should include at least one real Quran mp3 source.',
+      );
+      expect(
+        options.any(
+          (item) =>
+              item.category == 'Prayer Call' && item.audioUrl.endsWith('.mp3'),
+        ),
+        isTrue,
+        reason:
+            'Prayer tab speaker routing should include real Arabic adhan mp3 sources.',
+      );
+      expect(
+        options.any(
+          (item) => item.category == 'Adhkar' && item.audioUrl.endsWith('.mp3'),
+        ),
+        isTrue,
+        reason:
+            'Prayer tab speaker routing should include real Arabic adhkar mp3 sources.',
+      );
+    },
+  );
+
+  test('speaker routing scans and connects every supported cast protocol', () {
+    final router = File(
+      'lib/src/services/prayer_audio_routing_service.dart',
+    ).readAsStringSync();
+
     expect(
-      options.any((item) => item.category == 'Quran' && item.audioUrl.endsWith('.mp3')),
+      router.contains('ChromecastDiscoveryProvider()'),
       isTrue,
-      reason: 'Prayer tab speaker routing should include at least one real Quran mp3 source.',
+      reason:
+          'Chromecast discovery should be available on both mobile platforms.',
     );
     expect(
-      options.any((item) => item.category == 'Prayer Call' && item.audioUrl.endsWith('.mp3')),
+      router.contains('AirPlayDiscoveryProvider()'),
       isTrue,
-      reason: 'Prayer tab speaker routing should include real Arabic adhan mp3 sources.',
+      reason:
+          'iOS parity requires AirPlay discovery for local Apple speakers and TVs.',
     );
     expect(
-      options.any((item) => item.category == 'Adhkar' && item.audioUrl.endsWith('.mp3')),
+      router.contains('DlnaDiscoveryProvider()'),
       isTrue,
-      reason: 'Prayer tab speaker routing should include real Arabic adhkar mp3 sources.',
+      reason:
+          'DLNA discovery should stay available for common LAN speakers and TVs.',
     );
+    expect(router.contains('CastProtocol.airplay'), isTrue);
+    expect(router.contains('AirPlaySession(device)'), isTrue);
   });
 }

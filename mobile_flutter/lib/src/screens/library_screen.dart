@@ -33,7 +33,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final _sharedAudio = SharedAudioPlayer.instance;
   final _quranAudioController = QuranAudioController.instance;
   final _offlineCache = OfflineCacheService.instance;
-  final _audioRouting = AudioOutputRoutingService(owner: SharedAudioOwner.library);
+  final _audioRouting = AudioOutputRoutingService(
+    owner: SharedAudioOwner.library,
+  );
 
   LibrarySection _section = AppScreenshotScene.librarySection == 'adhkar'
       ? LibrarySection.adhkar
@@ -194,20 +196,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
-  List<AdhkarEntry> get _activeEntries =>
-      _section == LibrarySection.hisn
-          ? (_hisnData?.entries ?? const <AdhkarEntry>[])
-          : (_adhkarData?.entries ?? const <AdhkarEntry>[]);
+  List<AdhkarEntry> get _activeEntries => _section == LibrarySection.hisn
+      ? (_hisnData?.entries ?? const <AdhkarEntry>[])
+      : (_adhkarData?.entries ?? const <AdhkarEntry>[]);
 
-  AdhkarAudioSource? get _activeAudioSource =>
-      _section == LibrarySection.hisn
-          ? _hisnData?.audioSource
-          : _adhkarAudioSource;
+  AdhkarAudioSource? get _activeAudioSource => _section == LibrarySection.hisn
+      ? _hisnData?.audioSource
+      : _adhkarAudioSource;
 
-  String get _activeCollectionTitle =>
-      _section == LibrarySection.hisn
-          ? (_hisnData?.categoryName ?? 'Hisn Muslim')
-          : (_adhkarData?.selectedCategory ?? 'Adhkar');
+  String get _activeCollectionTitle => _section == LibrarySection.hisn
+      ? (_hisnData?.categoryName ?? 'Hisn Muslim')
+      : (_adhkarData?.selectedCategory ?? 'Adhkar');
 
   List<String> get _activeDownloadUrls {
     final source = _activeAudioSource;
@@ -310,7 +309,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
         [
           for (var trackIndex = 0; trackIndex < trackUrls.length; trackIndex++)
             AudioSource.uri(
-              await _offlineCache.resolvePlayableAudioUri(trackUrls[trackIndex]),
+              await _offlineCache.resolvePlayableAudioUri(
+                trackUrls[trackIndex],
+              ),
               tag: _buildAdhkarMediaItem(
                 entryIndex: trackToEntryIndex[trackIndex],
                 url: trackUrls[trackIndex],
@@ -530,7 +531,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
       return;
     }
 
-    if (mode != AdhkarMode.read && _speakerRouteMode != SpeakerRouteMode.mobileOnly) {
+    if (mode != AdhkarMode.read &&
+        _speakerRouteMode != SpeakerRouteMode.mobileOnly) {
       await _broadcastLibrarySelection();
       return;
     }
@@ -655,7 +657,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final adhkarEntries = _adhkarData?.entries ?? const <AdhkarEntry>[];
     final hisnEntries = _hisnData?.entries ?? const <AdhkarEntry>[];
     final currentAdhkarEntry =
-        _activeEntries.isEmpty || _adhkarActiveEntryIndex >= _activeEntries.length
+        _activeEntries.isEmpty ||
+            _adhkarActiveEntryIndex >= _activeEntries.length
         ? null
         : _activeEntries[_adhkarActiveEntryIndex];
 
@@ -734,7 +737,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 AudioOutputRoutingCard(
                   title: 'Speaker Output',
                   description:
-                      'Save an Adhkar-specific output preset. Keep playback on this phone, or broadcast the current category or active dhikr to selected LAN speakers.',
+                      'Save an Adhkar-specific output preset. Keep playback on this phone, or broadcast the current category or active dhikr to selected Chromecast, AirPlay, or DLNA speakers.',
                   routeMode: _speakerRouteMode,
                   selectedSpeakerIds: _selectedSpeakerIds,
                   discoveredDevices: _audioRouting.devices,
@@ -743,7 +746,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   statusMessage: _audioRouting.statusMessage,
                   errorMessage: _audioRouting.errorMessage,
                   isPhonePlaybackActive:
-                      _adhkarAudioPlaying || _audioRouting.isPhonePlaybackActive,
+                      _adhkarAudioPlaying ||
+                      _audioRouting.isPhonePlaybackActive,
                   hasRemotePlayback: _audioRouting.hasRemotePlayback,
                   onScanPressed: _audioRouting.isDiscovering
                       ? _audioRouting.stopDiscovery
@@ -823,7 +827,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 AudioOutputRoutingCard(
                   title: 'Speaker Output',
                   description:
-                      'Save a Hisn Muslim output preset. Keep playback on this phone, or broadcast the current entry to selected LAN speakers.',
+                      'Save a Hisn Muslim output preset. Keep playback on this phone, or broadcast the current entry to selected Chromecast, AirPlay, or DLNA speakers.',
                   routeMode: _speakerRouteMode,
                   selectedSpeakerIds: _selectedSpeakerIds,
                   discoveredDevices: _audioRouting.devices,
@@ -832,7 +836,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   statusMessage: _audioRouting.statusMessage,
                   errorMessage: _audioRouting.errorMessage,
                   isPhonePlaybackActive:
-                      _adhkarAudioPlaying || _audioRouting.isPhonePlaybackActive,
+                      _adhkarAudioPlaying ||
+                      _audioRouting.isPhonePlaybackActive,
                   hasRemotePlayback: _audioRouting.hasRemotePlayback,
                   onScanPressed: _audioRouting.isDiscovering
                       ? _audioRouting.stopDiscovery
@@ -917,7 +922,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ..._buildAdhkarContent(
             entries: hisnEntries,
             currentEntry: currentAdhkarEntry,
-          )
+          ),
       ],
     );
   }
@@ -931,12 +936,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
         return [
           _AdhkarListenOnlyCard(
             entry: currentEntry,
-            indexLabel:
-                '${_adhkarActiveEntryIndex + 1} of ${entries.length}',
+            indexLabel: '${_adhkarActiveEntryIndex + 1} of ${entries.length}',
             isPlaying: _adhkarAudioPlaying,
             isLoading: _adhkarAudioLoading,
             onTogglePlayback: _toggleAdhkarPlayback,
-            onPrevious: _adhkarActiveEntryIndex > 0 ? _seekAdhkarPrevious : null,
+            onPrevious: _adhkarActiveEntryIndex > 0
+                ? _seekAdhkarPrevious
+                : null,
             onNext: _adhkarActiveEntryIndex + 1 < entries.length
                 ? _seekAdhkarNext
                 : null,
@@ -1104,10 +1110,7 @@ class _AdhkarListenOnlyCard extends StatelessWidget {
             if (entry.reference.isNotEmpty)
               Align(
                 alignment: Alignment.centerRight,
-                child: ArabicText(
-                  entry.reference,
-                  style: textTheme.bodyMedium,
-                ),
+                child: ArabicText(entry.reference, style: textTheme.bodyMedium),
               ),
             const SizedBox(height: 16),
             Row(
@@ -1125,7 +1128,11 @@ class _AdhkarListenOnlyCard extends StatelessWidget {
                         : Icons.play_circle_fill,
                   ),
                   label: Text(
-                    isLoading ? 'Loading…' : isPlaying ? 'Pause' : 'Play',
+                    isLoading
+                        ? 'Loading…'
+                        : isPlaying
+                        ? 'Pause'
+                        : 'Play',
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1265,9 +1272,7 @@ class _ArabicEntryCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Card(
-      color: isActive
-          ? scheme.primaryContainer.withValues(alpha: 0.7)
-          : null,
+      color: isActive ? scheme.primaryContainer.withValues(alpha: 0.7) : null,
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(

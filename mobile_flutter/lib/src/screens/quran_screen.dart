@@ -50,7 +50,9 @@ class _QuranScreenState extends State<QuranScreen> {
   final _preferences = AppPreferencesService.instance;
   final _audioController = QuranAudioController.instance;
   final _offlineCache = OfflineCacheService.instance;
-  final _audioRouting = AudioOutputRoutingService(owner: SharedAudioOwner.quran);
+  final _audioRouting = AudioOutputRoutingService(
+    owner: SharedAudioOwner.quran,
+  );
 
   List<SurahSummary> _surahs = const [];
   SurahDetail? _detail;
@@ -175,10 +177,7 @@ class _QuranScreenState extends State<QuranScreen> {
     }
   }
 
-  Future<void> _reloadSurah({
-    int? initialIndex,
-    bool autoplay = false,
-  }) async {
+  Future<void> _reloadSurah({int? initialIndex, bool autoplay = false}) async {
     setState(() {
       _loading = true;
       _error = '';
@@ -254,12 +253,11 @@ class _QuranScreenState extends State<QuranScreen> {
     setState(() => _bookmarks = bookmarks);
   }
 
-  List<String> get _currentAudioUrls =>
-      (_detail?.ayahs ?? const <AyahRow>[])
-          .where((ayah) => ayah.audioUrl.isNotEmpty)
-          .map((ayah) => ayah.audioUrl)
-          .toSet()
-          .toList(growable: false);
+  List<String> get _currentAudioUrls => (_detail?.ayahs ?? const <AyahRow>[])
+      .where((ayah) => ayah.audioUrl.isNotEmpty)
+      .map((ayah) => ayah.audioUrl)
+      .toSet()
+      .toList(growable: false);
 
   Future<void> _refreshDownloadStatus() async {
     final downloadedCount = await _offlineCache.countDownloadedAudioUrls(
@@ -333,11 +331,11 @@ class _QuranScreenState extends State<QuranScreen> {
 
   String _readerLabelFor(String value) {
     return QuranService.readerOptions
-            .firstWhere(
-              (item) => item.value == value,
-              orElse: () => const SelectionOption(value: '', label: 'Reciter'),
-            )
-            .label;
+        .firstWhere(
+          (item) => item.value == value,
+          orElse: () => const SelectionOption(value: '', label: 'Reciter'),
+        )
+        .label;
   }
 
   @override
@@ -345,8 +343,9 @@ class _QuranScreenState extends State<QuranScreen> {
     final textTheme = Theme.of(context).textTheme;
     final ayahs = _detail?.ayahs ?? const <AyahRow>[];
     final activeIndex = _audioController.activeIndex;
-    final activeAyah =
-        ayahs.isEmpty || activeIndex >= ayahs.length ? null : ayahs[activeIndex];
+    final activeAyah = ayahs.isEmpty || activeIndex >= ayahs.length
+        ? null
+        : ayahs[activeIndex];
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -359,13 +358,11 @@ class _QuranScreenState extends State<QuranScreen> {
         ),
         const SizedBox(height: 16),
         if (_detail != null)
-            _ResumeCard(
+          _ResumeCard(
             activeAyahIndex: activeIndex,
             totalAyahs: ayahs.length,
             bookmarkCount: _bookmarks.length,
-            onResume: ayahs.isEmpty
-                ? null
-                : () => _playAyah(activeIndex),
+            onResume: ayahs.isEmpty ? null : () => _playAyah(activeIndex),
           ),
         if (_detail != null) const SizedBox(height: 12),
         Card(
@@ -374,7 +371,8 @@ class _QuranScreenState extends State<QuranScreen> {
             child: Column(
               children: [
                 DropdownButtonFormField<int>(
-                  initialValue: _surahs.any((item) => item.number == _surahNumber)
+                  initialValue:
+                      _surahs.any((item) => item.number == _surahNumber)
                       ? _surahNumber
                       : null,
                   decoration: const InputDecoration(labelText: 'Surah'),
@@ -466,7 +464,7 @@ class _QuranScreenState extends State<QuranScreen> {
                 AudioOutputRoutingCard(
                   title: 'Speaker Output',
                   description:
-                      'Save a Quran-specific output preset. Keep recitation on this phone, or scan the local network and broadcast the current ayah to selected smart speakers.',
+                      'Save a Quran-specific output preset. Keep recitation on this phone, or scan the local network and broadcast the current ayah to selected Chromecast, AirPlay, or DLNA speakers.',
                   routeMode: _speakerRouteMode,
                   selectedSpeakerIds: _selectedSpeakerIds,
                   discoveredDevices: _audioRouting.devices,
@@ -475,7 +473,8 @@ class _QuranScreenState extends State<QuranScreen> {
                   statusMessage: _audioRouting.statusMessage,
                   errorMessage: _audioRouting.errorMessage,
                   isPhonePlaybackActive:
-                      _audioController.isPlaying || _audioRouting.isPhonePlaybackActive,
+                      _audioController.isPlaying ||
+                      _audioRouting.isPhonePlaybackActive,
                   hasRemotePlayback: _audioRouting.hasRemotePlayback,
                   onScanPressed: _audioRouting.isDiscovering
                       ? _audioRouting.stopDiscovery
@@ -498,7 +497,9 @@ class _QuranScreenState extends State<QuranScreen> {
                 const SizedBox(height: 16),
                 _OfflineQuranAudioCard(
                   downloadedCount: _downloadedAyahAudioCount,
-                  totalCount: ayahs.where((ayah) => ayah.audioUrl.isNotEmpty).length,
+                  totalCount: ayahs
+                      .where((ayah) => ayah.audioUrl.isNotEmpty)
+                      .length,
                   isBusy: _downloadBusy,
                   onDownload: _downloadCurrentSurahAudio,
                   onRemove: _downloadedAyahAudioCount > 0
@@ -538,8 +539,9 @@ class _QuranScreenState extends State<QuranScreen> {
               audioLoading: _audioController.isLoading,
               onTogglePlayback: _toggleQuranPlayback,
               onStepBack: activeIndex > 0 ? _seekPreviousQuran : null,
-              onStepForward:
-                  activeIndex + 1 < ayahs.length ? _seekNextQuran : null,
+              onStepForward: activeIndex + 1 < ayahs.length
+                  ? _seekNextQuran
+                  : null,
             )
           else
             ...ayahs.asMap().entries.map((entry) {
@@ -553,9 +555,7 @@ class _QuranScreenState extends State<QuranScreen> {
                   isActive: isActive,
                   isBookmarked: _bookmarks.contains(ayah.verseKey),
                   onBookmark: () => _toggleBookmark(ayah.verseKey),
-                  onPlay: ayah.audioUrl.isEmpty
-                      ? null
-                      : () => _playAyah(index),
+                  onPlay: ayah.audioUrl.isEmpty ? null : () => _playAyah(index),
                 ),
               );
             }),

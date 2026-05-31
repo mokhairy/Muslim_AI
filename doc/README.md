@@ -5,10 +5,11 @@ This folder is the handoff set for the current state of the project.
 ## Read In This Order
 
 1. [current-state.md](/Users/mkhairy/Documents/GitHub/Muslim_AI/doc/current-state.md)
-2. [mobile-roadmap.md](/Users/mkhairy/Documents/GitHub/Muslim_AI/doc/mobile-roadmap.md)
-3. [conversation-export-2026-04-05.md](/Users/mkhairy/Documents/GitHub/Muslim_AI/doc/conversation-export-2026-04-05.md)
-4. [move-to-new-machine.md](/Users/mkhairy/Documents/GitHub/Muslim_AI/doc/move-to-new-machine.md)
-5. [shipping-guide.md](/Users/mkhairy/Documents/GitHub/Muslim_AI/doc/shipping-guide.md)
+2. [working-profile.md](/Users/mkhairy/Documents/GitHub/Muslim_AI/doc/working-profile.md)
+3. [mobile-roadmap.md](/Users/mkhairy/Documents/GitHub/Muslim_AI/doc/mobile-roadmap.md)
+4. [conversation-export-2026-04-05.md](/Users/mkhairy/Documents/GitHub/Muslim_AI/doc/conversation-export-2026-04-05.md)
+5. [move-to-new-machine.md](/Users/mkhairy/Documents/GitHub/Muslim_AI/doc/move-to-new-machine.md)
+6. [shipping-guide.md](/Users/mkhairy/Documents/GitHub/Muslim_AI/doc/shipping-guide.md)
 
 ## Files In This Folder
 
@@ -20,6 +21,9 @@ This folder is the handoff set for the current state of the project.
 
 - `mobile-roadmap.md`
   Tracks the next two mobile phases: local device adhan automation first, then optional smart-speaker targeting.
+
+- `working-profile.md`
+  Records the repository owner's operational working style and the assumptions future agents should and should not make.
 
 - `move-to-new-machine.md`
   A practical migration guide for getting this repository running on another computer.
